@@ -31,6 +31,10 @@
 
 #include "logging.h"
 
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#endif
+
 /* IPv6 prefix for IPv4-mapped addresses. These are in the
  * ::FFFF:0:0/96 space, i.e. 10 bytes of 0x00 and 2 bytes of 0xFF. See
  * RFC 4291 ("IPv6 Addressing Architecture") section 2.5.5.2
@@ -40,7 +44,8 @@ const u8 ipv4_mapped_prefix[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF };
 
 int ip_address_length(int address_family)
 {
-	switch (address_family) {
+	switch (address_family)
+	{
 	case AF_INET:
 		return sizeof(struct in_addr);
 	case AF_INET6:
@@ -55,7 +60,8 @@ int ip_address_length(int address_family)
 
 int sockaddr_length(int address_family)
 {
-	switch (address_family) {
+	switch (address_family)
+	{
 	case AF_INET:
 		return sizeof(struct sockaddr_in);
 	case AF_INET6:
@@ -149,13 +155,16 @@ struct ip_address ipv6_map_from_ipv4(const struct ip_address ipv4)
 int ipv6_map_to_ipv4(const struct ip_address ipv6, struct ip_address *ipv4)
 {
 	if (memcmp(&ipv6.ip.v6.s6_addr,
-		   ipv4_mapped_prefix, sizeof(ipv4_mapped_prefix)) == 0) {
+	           ipv4_mapped_prefix, sizeof(ipv4_mapped_prefix)) == 0)
+	{
 		ipv4_init(ipv4);
 		memcpy(&ipv4->ip.v4,
 		       ipv6.ip.v6.s6_addr + sizeof(ipv4_mapped_prefix),
 		       sizeof(ipv4->ip.v4));
 		return STATUS_OK;
-	} else {
+	}
+	else
+	{
 		return STATUS_ERR;
 	}
 }
@@ -164,7 +173,7 @@ int ipv6_map_to_ipv4(const struct ip_address ipv6, struct ip_address *ipv4)
  * address and port.
  */
 static void ipv4_to_sockaddr(const struct ip_address *ipv4, u16 port,
-			     struct sockaddr *address, socklen_t *length)
+                             struct sockaddr *address, socklen_t *length)
 {
 	struct sockaddr_in sa_v4;
 	memset(&sa_v4, 0, sizeof(sa_v4));
@@ -182,7 +191,7 @@ static void ipv4_to_sockaddr(const struct ip_address *ipv4, u16 port,
  * address and port.
  */
 static void ipv6_to_sockaddr(const struct ip_address *ipv6, u16 port,
-			     struct sockaddr *address, socklen_t *length)
+                             struct sockaddr *address, socklen_t *length)
 {
 	struct sockaddr_in6 sa_v6;
 	memset(&sa_v6, 0, sizeof(sa_v6));
@@ -197,9 +206,10 @@ static void ipv6_to_sockaddr(const struct ip_address *ipv6, u16 port,
 }
 
 void ip_to_sockaddr(const struct ip_address *ip, u16 port,
-		    struct sockaddr *address, socklen_t *length)
+                    struct sockaddr *address, socklen_t *length)
 {
-	switch (ip->address_family) {
+	switch (ip->address_family)
+	{
 	case AF_INET:
 		ipv4_to_sockaddr(ip, port, address, length);
 		break;
@@ -215,7 +225,7 @@ void ip_to_sockaddr(const struct ip_address *ip, u16 port,
 
 /* Extract and return the IPv4 address and port from the given sockaddr. */
 static void ipv4_from_sockaddr(const struct sockaddr *address, socklen_t length,
-			       struct ip_address *ipv4, u16 *port)
+                               struct ip_address *ipv4, u16 *port)
 {
 	assert(address->sa_family == AF_INET);
 	ipv4_init(ipv4);
@@ -229,7 +239,7 @@ static void ipv4_from_sockaddr(const struct sockaddr *address, socklen_t length,
 
 /* Extract and return the IPv6 address and port from the given sockaddr. */
 static void ipv6_from_sockaddr(const struct sockaddr *address, socklen_t length,
-			       struct ip_address *ipv4, u16 *port)
+                               struct ip_address *ipv4, u16 *port)
 {
 	assert(address->sa_family == AF_INET6);
 	ipv6_init(ipv4);
@@ -242,9 +252,10 @@ static void ipv6_from_sockaddr(const struct sockaddr *address, socklen_t length,
 }
 
 void ip_from_sockaddr(const struct sockaddr *address, socklen_t length,
-		      struct ip_address *ip, u16 *port)
+                      struct ip_address *ip, u16 *port)
 {
-	switch (address->sa_family) {
+	switch (address->sa_family)
+	{
 	case AF_INET:
 		ipv4_from_sockaddr(address, length, ip, port);
 		break;
@@ -266,7 +277,8 @@ int get_ip_device(const struct ip_address *ip, char *dev_name)
 	if (getifaddrs(&ifaddr_list))
 		die_perror("getifaddrs");
 
-	for (ifaddr = ifaddr_list; ifaddr != NULL; ifaddr = ifaddr->ifa_next) {
+	for (ifaddr = ifaddr_list; ifaddr != NULL; ifaddr = ifaddr->ifa_next)
+	{
 		int family;
 		struct ip_address interface_ip;
 		u16 port;
@@ -279,8 +291,9 @@ int get_ip_device(const struct ip_address *ip, char *dev_name)
 			continue;
 
 		ip_from_sockaddr(ifaddr->ifa_addr, sockaddr_length(family),
-				 &interface_ip, &port);
-		if (is_equal_ip(ip, &interface_ip)) {
+		                 &interface_ip, &port);
+		if (is_equal_ip(ip, &interface_ip))
+		{
 			assert(ifaddr->ifa_name);
 			assert(strlen(ifaddr->ifa_name) < IFNAMSIZ);
 			strcpy(dev_name, ifaddr->ifa_name);
@@ -308,8 +321,9 @@ extern int netmask_to_prefix(const char *netmask)
 	u32 mask_addr = ntohl(mask.ip.v4.s_addr);
 	int prefix_len = 0;
 
-	for (pos = 31; pos >= 0; --pos) {
-		if (!(mask_addr & (1<<pos)))
+	for (pos = 31; pos >= 0; --pos)
+	{
+		if (!(mask_addr & (1 << pos)))
 			break;
 		++prefix_len;
 	}
