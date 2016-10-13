@@ -45,6 +45,10 @@
 #include <net/if_tun.h>
 #endif /* defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) */
 
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#endif
+
 #include "ip.h"
 #include "ipv6.h"
 #include "logging.h"
@@ -56,7 +60,8 @@
 #include "tun.h"
 
 /* Internal private state for the netdev for purely local tests. */
-struct local_netdev {
+struct local_netdev
+{
 	struct netdev netdev;		/* "inherit" from netdev */
 
 	char *name;		/* malloc-ed copy of interface name (owned) */
@@ -80,15 +85,15 @@ static inline struct local_netdev *to_local_netdev(struct netdev *netdev)
  * unreferenced tun devices and routes referencing those routes.
  */
 static void cleanup_old_device(struct config *config,
-				struct local_netdev *netdev)
+                               struct local_netdev *netdev)
 {
 #if defined(__NetBSD__)
 	char *cleanup_command = NULL;
 	int result;
 
 	asprintf(&cleanup_command,
-		 "/sbin/ifconfig %s down delete > /dev/null 2>&1",
-		 TUN_DEV);
+	         "/sbin/ifconfig %s down delete > /dev/null 2>&1",
+	         TUN_DEV);
 	DEBUGP("running: '%s'\n", cleanup_command);
 	result = system(cleanup_command);
 	DEBUGP("result: %d\n", result);
@@ -100,9 +105,10 @@ static void cleanup_old_device(struct config *config,
  * that test packets will pass into our tun device.
  */
 static void check_remote_address(struct config *config,
-				 struct local_netdev *netdev)
+                                 struct local_netdev *netdev)
 {
-	if (is_ip_local(&config->live_remote_ip)) {
+	if (is_ip_local(&config->live_remote_ip))
+	{
 		die("error: live_remote_ip %s is not remote\n",
 		    config->live_remote_ip_string);
 	}
@@ -159,10 +165,18 @@ static void create_device(struct config *config, struct local_netdev *netdev)
 
 	DEBUGP("tun index: '%d'\n", netdev->index);
 
-	if (config->speed != TUN_DRIVER_SPEED_CUR) {
+	if (config->speed != TUN_DRIVER_SPEED_CUR)
+	{
 		char *command;
+#ifdef ECOS
+		int len = strlen("ethtool -s  speed  autoneg off") + strlen(netdev->name) + 8;
+		command = malloc(len);
+		snprintf(command, len, "ethtool -s %s speed %u autoneg off",
+		         netdev->name, config->speed);
+#else
 		asprintf(&command, "ethtool -s %s speed %u autoneg off",
-			 netdev->name, config->speed);
+		         netdev->name, config->speed);
+#endif
 		if (system(command) < 0)
 			die("Error executing %s\n", command);
 		free(command);
@@ -170,17 +184,33 @@ static void create_device(struct config *config, struct local_netdev *netdev)
 		/* Need to bring interface down and up so the interface speed
 		 * will be copied to the link_speed field. This field is
 		 * used by TCP's cwnd bound. */
+#ifdef ECOS
+		int len2 = strlen("ifconfig  down; sleep 1; ifconfig  up; ") + strlen(netdev->name) + strlen(netdev->name);
+		command = malloc(len2);
+		snprintf(command, len2, "ifconfig %s down; sleep 1; ifconfig %s up; ",
+		         netdev->name, netdev->name);
+#else
 		asprintf(&command, "ifconfig %s down; sleep 1; ifconfig %s up; "
-			      "sleep 1", netdev->name, netdev->name);
+		         "sleep 1", netdev->name, netdev->name);
+#endif
 		if (system(command) < 0)
 			die("Error executing %s\n", command);
 		free(command);
 	}
 
-	if (config->mtu != TUN_DRIVER_DEFAULT_MTU) {
+	if (config->mtu != TUN_DRIVER_DEFAULT_MTU)
+	{
 		char *command;
+#ifdef ECOS
+
+		int len = strlen("ifconfig  mtu ") + strlen(netdev->name) + 8;
+		command = malloc(len);
+		snprintf(command, len, "ifconfig %s mtu %d",
+		         netdev->name, config->mtu);
+#else
 		asprintf(&command, "ifconfig %s mtu %d",
-			 netdev->name, config->mtu);
+		         netdev->name, config->mtu);
+#endif
 		if (system(command) < 0)
 			die("Error executing %s\n", command);
 		free(command);
@@ -223,43 +253,49 @@ static void bring_up_device(struct local_netdev *netdev)
 
 /* Route traffic destined for our remote IP through this device */
 static void route_traffic_to_device(struct config *config,
-				    struct local_netdev *netdev)
+                                    struct local_netdev *netdev)
 {
 	char *route_command = NULL;
 #ifdef linux
 	asprintf(&route_command,
-		 "ip route del %s > /dev/null 2>&1 ; "
-		 "ip route add %s dev %s via %s > /dev/null 2>&1",
-		 config->live_remote_prefix_string,
-		 config->live_remote_prefix_string,
-		 netdev->name,
-		 config->live_gateway_ip_string);
+	         "ip route del %s > /dev/null 2>&1 ; "
+	         "ip route add %s dev %s via %s > /dev/null 2>&1",
+	         config->live_remote_prefix_string,
+	         config->live_remote_prefix_string,
+	         netdev->name,
+	         config->live_gateway_ip_string);
 #endif
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
-	if (config->wire_protocol == AF_INET) {
+	if (config->wire_protocol == AF_INET)
+	{
 		asprintf(&route_command,
-			 "route delete %s > /dev/null 2>&1 ; "
-			 "route add %s %s > /dev/null",
-			 config->live_remote_prefix_string,
-			 config->live_remote_prefix_string,
-			 config->live_gateway_ip_string);
-	} else if (config->wire_protocol == AF_INET6) {
+		         "route delete %s > /dev/null 2>&1 ; "
+		         "route add %s %s > /dev/null",
+		         config->live_remote_prefix_string,
+		         config->live_remote_prefix_string,
+		         config->live_gateway_ip_string);
+	}
+	else if (config->wire_protocol == AF_INET6)
+	{
 		asprintf(&route_command,
-			 "route delete -inet6 %s > /dev/null 2>&1 ; "
+		         "route delete -inet6 %s > /dev/null 2>&1 ; "
 #if defined(__FreeBSD__)
-			 "route add -inet6 %s -interface tun0 %s > /dev/null",
+		         "route add -inet6 %s -interface tun0 %s > /dev/null",
 #elif defined(__OpenBSD__) || defined(__NetBSD__)
-			 "route add -inet6 %s %s > /dev/null",
+		         "route add -inet6 %s %s > /dev/null",
 #endif
-			 config->live_remote_prefix_string,
-			 config->live_remote_prefix_string,
-			 config->live_gateway_ip_string);
-	} else {
+		         config->live_remote_prefix_string,
+		         config->live_remote_prefix_string,
+		         config->live_gateway_ip_string);
+	}
+	else
+	{
 		assert(!"bad wire protocol");
 	}
 #endif /* defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) */
 	int result = system(route_command);
-	if ((result == -1) || (WEXITSTATUS(result) != 0)) {
+	if ((result == -1) || (WEXITSTATUS(result) != 0))
+	{
 		die("error executing route command '%s'\n",
 		    route_command);
 	}
@@ -280,8 +316,8 @@ struct netdev *local_netdev_new(struct config *config)
 	bring_up_device(netdev);
 
 	net_setup_dev_address(netdev->name,
-			      &config->live_local_ip,
-			      config->live_prefix_len);
+	                      &config->live_local_ip,
+	                      config->live_prefix_len);
 
 	route_traffic_to_device(config, netdev);
 	netdev->psock = packet_socket_new(netdev->name);
@@ -307,7 +343,7 @@ static void local_netdev_free(struct netdev *a_netdev)
 	free(netdev);
 }
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(ECOS)
 /* According to `man 4 tun` on OpenBSD: "Each packet read or written
  * is prefixed with a tunnel header consisting of a 4-byte network
  * byte order integer containing the address family in the case of
@@ -317,10 +353,11 @@ static void local_netdev_free(struct netdev *a_netdev)
  * packets are IPv4).
  */
 static void bsd_tun_write(struct local_netdev *netdev,
-			  struct packet *packet)
+                          struct packet *packet)
 {
 	int address_family = htonl(packet_address_family(packet));
-	struct iovec vector[2] = {
+	struct iovec vector[2] =
+	{
 		{ &address_family, sizeof(address_family) },
 		{ packet_start(packet), packet->ip_bytes }
 	};
@@ -332,7 +369,7 @@ static void bsd_tun_write(struct local_netdev *netdev,
 
 #ifdef linux
 static void linux_tun_write(struct local_netdev *netdev,
-			    struct packet *packet)
+                            struct packet *packet)
 {
 	if (write(netdev->tun_fd, packet_start(packet), packet->ip_bytes) < 0)
 		die_perror("Linux tun write()");
@@ -340,7 +377,7 @@ static void linux_tun_write(struct local_netdev *netdev,
 #endif  /* linux */
 
 static int local_netdev_send(struct netdev *a_netdev,
-			     struct packet *packet)
+                             struct packet *packet)
 {
 	struct local_netdev *netdev = to_local_netdev(a_netdev);
 
@@ -352,7 +389,7 @@ static int local_netdev_send(struct netdev *a_netdev,
 
 	DEBUGP("local_netdev_send\n");
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(ECOS)
 	bsd_tun_write(netdev, packet);
 #endif /* defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) */
 
@@ -372,26 +409,28 @@ static int local_netdev_send(struct netdev *a_netdev,
  * byte of packet data to consume the packet.
  */
 static void local_netdev_read_queue(struct local_netdev *netdev,
-				    int num_packets)
+                                    int num_packets)
 {
 	char buf[1];
 	int i = 0, in_bytes = 0;
 
-	for (i = 0; i < num_packets; ++i) {
+	for (i = 0; i < num_packets; ++i)
+	{
 		in_bytes = read(netdev->tun_fd, buf, sizeof(buf));
 		assert(in_bytes <= (int)sizeof(buf));
 
-		if (in_bytes < 0) {
+		if (in_bytes < 0)
+		{
 			if (errno == EINTR)
 				continue;
 			else
 				die_perror("tun read()");
 		}
-       }
+	}
 }
 
 static int local_netdev_receive(struct netdev *a_netdev,
-				struct packet **packet, char **error)
+                                struct packet **packet, char **error)
 {
 	struct local_netdev *netdev = to_local_netdev(a_netdev);
 	int status = STATUS_ERR;
@@ -400,23 +439,24 @@ static int local_netdev_receive(struct netdev *a_netdev,
 	DEBUGP("local_netdev_receive\n");
 
 	status = netdev_receive_loop(netdev->psock, PACKET_LAYER_3_IP,
-				     DIRECTION_OUTBOUND, packet, &num_packets,
-				     error);
+	                             DIRECTION_OUTBOUND, packet, &num_packets,
+	                             error);
 	local_netdev_read_queue(netdev, num_packets);
 	return status;
 }
 
 int netdev_receive_loop(struct packet_socket *psock,
-			enum packet_layer_t layer,
-			enum direction_t direction,
-			struct packet **packet,
-			int *num_packets,
-			char **error)
+                        enum packet_layer_t layer,
+                        enum direction_t direction,
+                        struct packet **packet,
+                        int *num_packets,
+                        char **error)
 {
 	assert(*packet == NULL);	/* should be no packet yet */
 
 	*num_packets = 0;
-	while (1) {
+	while (1)
+	{
 		int in_bytes = 0;
 		enum packet_parse_result_t result;
 
@@ -446,7 +486,8 @@ int netdev_receive_loop(struct packet_socket *psock,
 	return STATUS_ERR;	/* not reached */
 }
 
-struct netdev_ops local_netdev_ops = {
+struct netdev_ops local_netdev_ops =
+{
 	.free = local_netdev_free,
 	.send = local_netdev_send,
 	.receive = local_netdev_receive,
