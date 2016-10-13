@@ -30,6 +30,10 @@
 
 #include "logging.h"
 
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#endif
+
 struct ip_prefix ip_to_prefix(const struct ip_address *ip, int prefix_len)
 {
 	int max_prefix_bits = 8 * ip_address_length(ip->address_family);
@@ -52,7 +56,8 @@ void ip_prefix_normalize(struct ip_prefix *prefix)
 	int max_prefix_bytes = ip_address_length(prefix->ip.address_family);
 
 	/* Zero the bits beyond the prefix in the byte where it ends. */
-	if (bits != 0) {
+	if (bits != 0)
+	{
 		int pos = 8 - bits;
 		prefix->ip.ip.bytes[bytes] &= ~((1U << pos) - 1);
 		++bytes;
@@ -72,7 +77,8 @@ static int prefix_len_parse(const char *prefix_string, int max_len)
 	const char *len_str = NULL;
 
 	len_str = strstr(prefix_string, "/");
-	if (len_str != NULL) {
+	if (len_str != NULL)
+	{
 		/* Parse prefix len in string */
 		char *end = NULL;
 
@@ -81,10 +87,12 @@ static int prefix_len_parse(const char *prefix_string, int max_len)
 		prefix_len = strtol(len_str, &end, 10);
 
 		if (errno != 0 || *end != '\0' ||
-		    (prefix_len < 0) || (prefix_len > max_len))
+		        (prefix_len < 0) || (prefix_len > max_len))
 			die("bad prefix length in prefix '%s'\n",
 			    prefix_string);
-	} else {
+	}
+	else
+	{
 		/* Default prefix length is all address bits */
 		prefix_len = max_len;
 	}
@@ -109,7 +117,7 @@ struct ip_prefix ipv4_prefix_parse(const char *prefix_string)
 	char *ip_str = copy_prefix_address(prefix_string);
 	struct ip_address ip = ipv4_parse(ip_str);
 	int prefix_len = prefix_len_parse(prefix_string,
-					  8 * ip_address_length(AF_INET));
+	                                  8 * ip_address_length(AF_INET));
 
 	free(ip_str);
 
@@ -121,7 +129,7 @@ struct ip_prefix ipv6_prefix_parse(const char *prefix_string)
 	char *ip_str = copy_prefix_address(prefix_string);
 	struct ip_address ip = ipv6_parse(ip_str);
 	int prefix_len = prefix_len_parse(prefix_string,
-					  8 * ip_address_length(AF_INET6));
+	                                  8 * ip_address_length(AF_INET6));
 
 	free(ip_str);
 
@@ -140,7 +148,7 @@ const char *ip_prefix_to_string(struct ip_prefix *prefix, char *buffer)
 		die("address prefix would overflow buffer!");
 
 	bytes = snprintf(buffer, ADDR_STR_LEN, "%s/%d",
-			 ip_str, prefix->prefix_len);
+	                 ip_str, prefix->prefix_len);
 	if (bytes >= ADDR_STR_LEN)
 		die("address prefix overflowed buffer!");
 

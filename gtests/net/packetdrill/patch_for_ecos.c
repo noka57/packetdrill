@@ -1,5 +1,6 @@
 #ifdef ECOS
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/bsdtypes.h>
 #include <sys/socket.h>
 
@@ -414,6 +415,20 @@ inet_ntop6(const u_char *src, char *dst, size_t size)
 	return (dst);
 }
 
+char *
+strndup(const char *str, size_t n)
+{
+	size_t len;
+	char *copy;
+
+	for (len = 0; len < n && str[len]; len++)
+		continue;
+	if ((copy = malloc(len + 1)) == NULL)
+		return NULL;
+	(void)memcpy(copy, str, len);
+	copy[len] = '\0';
+	return copy;
+}
 
 #endif
 
