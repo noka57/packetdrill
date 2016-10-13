@@ -26,7 +26,11 @@
 
 #include <arpa/inet.h>
 #include <assert.h>
+#ifndef ECOS
 #include <getopt.h>
+#else
+#include "getopt.h"
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -45,11 +49,13 @@ static void run_init_scripts(struct config *config)
 		return;
 
 	cp1 = scripts = strdup(config->init_scripts);
-	while (*cp1 != 0) {
+	while (*cp1 != 0)
+	{
 		cp2 = strstr(cp1, ",");
 		if (cp2 != NULL)
 			*cp2 = 0;
-		if (safe_system(cp1, &error)) {
+		if (safe_system(cp1, &error))
+		{
 			die("%s: error executing init script '%s': %s\n",
 			    config->script_path, cp1, error);
 		}
@@ -69,11 +75,13 @@ int main(int argc, char *argv[])
 	char **arg = parse_command_line_options(argc, argv, &config);
 
 	/* If we're running as a server, just listen for connections forever. */
-	if (config.is_wire_server) {
-		if (*arg != NULL) {
+	if (config.is_wire_server)
+	{
+		if (*arg != NULL)
+		{
 			fprintf(stderr,
-				"error: do not pass script paths to "
-				"the wire server on command line\n");
+			        "error: do not pass script paths to "
+			        "the wire server on command line\n");
 			show_usage();
 			exit(EXIT_FAILURE);
 		}
@@ -86,19 +94,21 @@ int main(int argc, char *argv[])
 	 * confusion between the lack of output caused by "all tests
 	 * passing" and "no tests listed on command line".
 	 */
-	if (*arg == NULL) {
+	if (*arg == NULL)
+	{
 		fprintf(stderr, "error: missing script path\n");
 		show_usage();
 		exit(EXIT_FAILURE);
 	}
 
 	/* Parse and run each script on the command line. */
-	for (; *arg != NULL; ++arg) {
+	for (; *arg != NULL; ++arg)
+	{
 		struct script script;
 		const char *script_path = *arg;
 
 		if (parse_script_and_set_config(argc, argv, &config, &script,
-						script_path, NULL))
+		                                script_path, NULL))
 			exit(EXIT_FAILURE);
 
 		/* If --dry_run, then don't actually execute the script. */

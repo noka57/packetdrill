@@ -30,7 +30,11 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#ifndef ECOS
 #include <getopt.h>
+#else
+#include "getopt.h"
+#endif
 #include "ip_address.h"
 #include "ip_prefix.h"
 #include "script.h"
@@ -40,7 +44,8 @@
 
 extern struct option options[];
 
-struct config {
+struct config
+{
 	const char **argv;			/* a copy of process argv */
 
 	enum ip_version_t ip_version;		/* v4, v4-mapped-v6, v6 */
@@ -106,7 +111,8 @@ struct config {
 };
 
 /* Top-level info about the invocation of a test script */
-struct invocation {
+struct invocation
+{
 	int		argc;		/* count of process command line args */
 	char		**argv;		/* process command line args */
 	struct config *config;		/* run-time configuration */
@@ -135,7 +141,7 @@ extern void show_usage(void);
  * beyond the options.
  */
 extern char **parse_command_line_options(int argc, char *argv[],
-					 struct config *config);
+                                         struct config *config);
 
 /* The parser calls this function to finalize processing of config info. */
 extern void parse_and_finalize_config(struct invocation *invocation);

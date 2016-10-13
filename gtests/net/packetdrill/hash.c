@@ -35,13 +35,20 @@
 /*---------------------------------------------------------------------------
  * Platform-specific functions and macros
  */
-
+#ifdef ECOS
+static inline u32 rotl32(u32 x, s8 r)
+#else
 static __always_inline u32 rotl32(u32 x, s8 r)
+#endif
 {
 	return (x << r) | (x >> (32 - r));
 }
 
+#ifdef ECOS
+static inline u64 rotl64(u64 x, s8 r)
+#else
 static __always_inline u64 rotl64(u64 x, s8 r)
+#endif
 {
 	return (x << r) | (x >> (64 - r));
 }
@@ -55,13 +62,20 @@ static __always_inline u64 rotl64(u64 x, s8 r)
  * Block read - if your platform needs to do endian-swapping or can only
  * handle aligned reads, do the conversion here
  */
-
+#ifdef ECOS
+static inline u32 getblock_32(const u32 *p, int i)
+#else
 static __always_inline u32 getblock_32(const u32 *p, int i)
+#endif
 {
 	return p[i];
 }
 
+#ifdef ECOS
+static inline u64 getblock_64(const u64 *p, int i)
+#else
 static __always_inline u64 getblock_64(const u64 *p, int i)
+#endif
 {
 	return p[i];
 }
@@ -70,7 +84,11 @@ static __always_inline u64 getblock_64(const u64 *p, int i)
  * Finalization mix - force all bits of a hash block to avalanche
  */
 
+#ifdef ECOS
+static inline u32 fmix_32(u32 h)
+#else
 static __always_inline u32 fmix_32(u32 h)
+#endif
 {
 	h ^= h >> 16;
 	h *= 0x85ebca6b;
@@ -83,7 +101,11 @@ static __always_inline u32 fmix_32(u32 h)
 
 /*---------*/
 
+#ifdef ECOS
+static inline u64 fmix_64(u64 k)
+#else
 static __always_inline u64 fmix_64(u64 k)
+#endif
 {
 	k ^= k >> 33;
 	k *= BIG_CONSTANT(0xff51afd7ed558ccd);
@@ -112,7 +134,8 @@ void MurmurHash3_x86_32(const void *key, int len, u32 seed, void *out)
 	const u32 *blocks = (const u32 *)(data + nblocks * 4);
 
 	int i;
-	for (i = -nblocks; i; i++) {
+	for (i = -nblocks; i; i++)
+	{
 		u32 k1 = getblock_32(blocks, i);
 
 		k1 *= c1;
@@ -131,7 +154,8 @@ void MurmurHash3_x86_32(const void *key, int len, u32 seed, void *out)
 
 	u32 k1 = 0;
 
-	switch (len & 3) {
+	switch (len & 3)
+	{
 	case 3:
 		k1 ^= tail[2] << 16;
 	case 2:
@@ -177,7 +201,8 @@ void MurmurHash3_x86_128(const void *key, const int len, u32 seed, void *out)
 	const u32 *blocks = (const u32 *)(data + nblocks * 16);
 
 	int i;
-	for (i = -nblocks; i; i++) {
+	for (i = -nblocks; i; i++)
+	{
 		u32 k1 = getblock_32(blocks, i * 4 + 0);
 		u32 k2 = getblock_32(blocks, i * 4 + 1);
 		u32 k3 = getblock_32(blocks, i * 4 + 2);
@@ -230,7 +255,8 @@ void MurmurHash3_x86_128(const void *key, const int len, u32 seed, void *out)
 	u32 k3 = 0;
 	u32 k4 = 0;
 
-	switch (len & 15) {
+	switch (len & 15)
+	{
 	case 15:
 		k4 ^= tail[14] << 16;
 	case 14:
@@ -318,7 +344,7 @@ void MurmurHash3_x86_128(const void *key, const int len, u32 seed, void *out)
 /*---------------------------------------------------------------------------*/
 
 void MurmurHash3_x64_128(const void *key, const int len,
-			 const u32 seed, void *out)
+                         const u32 seed, void *out)
 {
 	const u8 *data = (const u8 *)key;
 	const int nblocks = len / 16;
@@ -335,7 +361,8 @@ void MurmurHash3_x64_128(const void *key, const int len,
 	const u64 *blocks = (const u64 *)(data);
 
 	int i;
-	for (i = 0; i < nblocks; i++) {
+	for (i = 0; i < nblocks; i++)
+	{
 		u64 k1 = getblock_64(blocks, i * 2 + 0);
 		u64 k2 = getblock_64(blocks, i * 2 + 1);
 
@@ -366,7 +393,8 @@ void MurmurHash3_x64_128(const void *key, const int len,
 	u64 k1 = 0;
 	u64 k2 = 0;
 
-	switch (len & 15) {
+	switch (len & 15)
+	{
 	case 15:
 		k2 ^= (u64) (tail[14]) << 48;
 	case 14:

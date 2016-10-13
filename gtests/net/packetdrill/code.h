@@ -31,15 +31,22 @@
 #include "config.h"
 #include "script.h"
 
+#ifdef ECOS
+#include <fcntl.h>
+#include "patch_for_ecos.h"
+#endif
+
 /* Post-processing format syntax variants we support. */
-enum code_format_t {
+enum code_format_t
+{
 	FORMAT_NONE,			/* uninitialized or no code so far */
 	FORMAT_PYTHON,			/* Python syntax: var_name = 123  */
 	FORMAT_NUM_TYPES,		/* number of types of format */
 };
 
 /* The type of a particular fragment of code. */
-enum code_fragment_t {
+enum code_fragment_t
+{
 	FRAGMENT_NONE,			/* uninitialized or none so far */
 	FRAGMENT_TEXT,			/* literal code text to emit */
 	FRAGMENT_DATA,			/* binary buffer to dump as text */
@@ -47,7 +54,8 @@ enum code_fragment_t {
 };
 
 /* The type of a particular binary data buffer. */
-enum code_data_t {
+enum code_data_t
+{
 	DATA_NONE,			/* uninitialized or none so far */
 #if HAVE_TCP_INFO
 	DATA_TCP_INFO,			/* binary tcp_info */
@@ -56,23 +64,27 @@ enum code_data_t {
 };
 
 /* Info about a textual code snippet to encode in the post-processing code. */
-struct code_text {
+struct code_text
+{
 	char *text;			/* the code snippet string */
 	char *file_name;		/* name of script text was read from */
 	int line_number;		/* line on which text started */
 };
 
 /* Info about a data buffer to encode in the post-processing code. */
-struct code_data {
+struct code_data
+{
 	void *buffer;			/* malloc-allocated buffer */
 	enum code_data_t type;		/* type of data in the buffer */
 	int len;			/* length of data in buffer */
 };
 
 /* Info about a fragment to insert in the post-processing code. */
-struct code_fragment {
+struct code_fragment
+{
 	enum code_fragment_t type;	/* what's in this fragment? */
-	union {
+	union
+	{
 		struct code_text *text;	/* ASCII text code snippet */
 		struct code_data *data;	/* typed binary data buffer */
 	} contents;
@@ -80,7 +92,8 @@ struct code_fragment {
 };
 
 /* Internal state for the code execution module. */
-struct code_state {
+struct code_state
+{
 	bool verbose;				/* print debug info? */
 	enum code_format_t format;		/* language syntax to emit */
 	enum code_data_t data_type;		/* data to get for snippets */
@@ -104,7 +117,7 @@ extern void code_free(struct code_state *code);
  */
 struct state;
 extern void run_code_event(struct state *state,
-			   struct event *event, const char *text);
+                           struct event *event, const char *text);
 
 /* Call this at the end of test execution to run the code by writing
  * out the text of the code and invoking the command line supplied by

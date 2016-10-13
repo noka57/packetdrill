@@ -28,8 +28,9 @@
 
 #include "types.h"
 
+#ifndef ECOS
 #include <stdint.h>
-
+#endif
 /*---------------------------------------------------------------------------*/
 
 void MurmurHash3_x86_32(const void *key, int len, u32 seed, void *out);

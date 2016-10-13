@@ -47,29 +47,30 @@
  * confusing to the user).
  */
 const char python_preamble[] =
-"import sys\n"
-"import traceback\n"
-"def excepthook(etype, value, tb):\n"
-"  sys.stderr.write(\"%s:%d: error in Python code\\n\" %\n"
-"                   (_file, _line))\n"
-"  traceback.print_exception(etype, value, tb)\n"
-"\n"
-"sys.excepthook = excepthook\n"
-"\n";
+    "import sys\n"
+    "import traceback\n"
+    "def excepthook(etype, value, tb):\n"
+    "  sys.stderr.write(\"%s:%d: error in Python code\\n\" %\n"
+    "                   (_file, _line))\n"
+    "  traceback.print_exception(etype, value, tb)\n"
+    "\n"
+    "sys.excepthook = excepthook\n"
+    "\n";
 
 /* Write out the standard utility routines useful for a given language. */
 static void write_preamble(struct code_state *code)
 {
 	assert(code->format > FORMAT_NONE);
 	assert(code->format < FORMAT_NUM_TYPES);
-	switch (code->format) {
+	switch (code->format)
+	{
 	case FORMAT_NONE:
 	case FORMAT_NUM_TYPES:
 		assert(!"bad code format type");
 	case FORMAT_PYTHON:
 		fprintf(code->file, "%s\n", python_preamble);
 		break;
-	/* omitting default so compiler catches missing cases */
+		/* omitting default so compiler catches missing cases */
 	}
 }
 
@@ -82,14 +83,15 @@ static void emit_var(struct code_state *code, const char *name, u64 value)
 {
 	assert(code->format > FORMAT_NONE);
 	assert(code->format < FORMAT_NUM_TYPES);
-	switch (code->format) {
+	switch (code->format)
+	{
 	case FORMAT_NONE:
 	case FORMAT_NUM_TYPES:
 		assert(!"bad code format type");
 	case FORMAT_PYTHON:
 		fprintf(code->file, "%s = %llu\n", name, value);
 		break;
-	/* omitting default so compiler catches missing cases */
+		/* omitting default so compiler catches missing cases */
 	}
 }
 
@@ -125,8 +127,8 @@ static void write_symbols(struct code_state *code)
 
 /* Write out a formatted representation of the given tcp_info buffer. */
 static void write_tcp_info(struct code_state *code,
-				   const struct _tcp_info *info,
-				   int len)
+                           const struct _tcp_info *info,
+                           int len)
 {
 	assert(len >= sizeof(struct _tcp_info));
 
@@ -176,8 +178,8 @@ static void write_tcp_info(struct code_state *code,
 
 /* Write out a formatted representation of the given tcp_info buffer. */
 static void write_tcp_info(struct code_state *code,
-				   const struct _tcp_info *info,
-				   int len)
+                           const struct _tcp_info *info,
+                           int len)
 {
 	assert(len >= sizeof(struct _tcp_info));
 
@@ -246,7 +248,7 @@ static void data_free(struct code_data *data)
 static struct code_fragment *fragment_new(void)
 {
 	struct code_fragment *fragment =
-		calloc(1, sizeof(struct code_fragment));
+	    calloc(1, sizeof(struct code_fragment));
 	return fragment;
 }
 
@@ -255,7 +257,8 @@ static void fragment_free(struct code_fragment *fragment)
 {
 	assert(fragment->type > FRAGMENT_NONE);
 	assert(fragment->type < FRAGMENT_NUM_TYPES);
-	switch (fragment->type) {
+	switch (fragment->type)
+	{
 	case FRAGMENT_NONE:
 	case FRAGMENT_NUM_TYPES:
 		assert(!"bad code fragment type");
@@ -266,7 +269,7 @@ static void fragment_free(struct code_fragment *fragment)
 	case FRAGMENT_DATA:
 		data_free(fragment->contents.data);
 		break;
-	/* omitting default so compiler catches missing cases */
+		/* omitting default so compiler catches missing cases */
 	}
 	free(fragment);
 }
@@ -276,18 +279,19 @@ static void write_text(struct code_state *code, struct code_text *text)
 {
 	assert(code->format > FORMAT_NONE);
 	assert(code->format < FORMAT_NUM_TYPES);
-	switch (code->format) {
+	switch (code->format)
+	{
 	case FORMAT_NONE:
 	case FORMAT_NUM_TYPES:
 		assert(!"bad code format type");
 	case FORMAT_PYTHON:
 		fprintf(code->file,
-			"_file = '%s'\n"
-			"_line = %d\n"
-			"%s\n\n",
-			text->file_name, text->line_number, text->text);
+		        "_file = '%s'\n"
+		        "_line = %d\n"
+		        "%s\n\n",
+		        text->file_name, text->line_number, text->text);
 		break;
-	/* omitting default so compiler catches missing cases */
+		/* omitting default so compiler catches missing cases */
 	}
 }
 
@@ -296,7 +300,8 @@ static void write_data(struct code_state *code, struct code_data *data)
 {
 	assert(data->type > DATA_NONE);
 	assert(data->type < DATA_NUM_TYPES);
-	switch (data->type) {
+	switch (data->type)
+	{
 	case DATA_NONE:
 	case DATA_NUM_TYPES:
 		assert(!"bad data type");
@@ -306,17 +311,18 @@ static void write_data(struct code_state *code, struct code_data *data)
 		write_tcp_info(code, data->buffer, data->len);
 		break;
 #endif  /* HAVE_TCP_INFO */
-	/* omitting default so compiler catches missing cases */
+		/* omitting default so compiler catches missing cases */
 	}
 }
 
 /* Write out a textual representation of the fragment to the given file. */
 static void write_fragment(struct code_state *code,
-			   struct code_fragment *fragment)
+                           struct code_fragment *fragment)
 {
 	assert(fragment->type > FRAGMENT_NONE);
 	assert(fragment->type < FRAGMENT_NUM_TYPES);
-	switch (fragment->type) {
+	switch (fragment->type)
+	{
 	case FRAGMENT_NONE:
 	case FRAGMENT_NUM_TYPES:
 		assert(!"bad code fragment type");
@@ -327,7 +333,7 @@ static void write_fragment(struct code_state *code,
 	case FRAGMENT_DATA:
 		write_data(code, fragment->contents.data);
 		break;
-	/* omitting default so compiler catches missing cases */
+		/* omitting default so compiler catches missing cases */
 	}
 }
 
@@ -336,14 +342,15 @@ static void write_all_fragments(struct code_state *code)
 {
 	struct code_fragment *fragment = NULL;
 	for (fragment = code->list_head; fragment != NULL;
-	     fragment = fragment->next) {
+	        fragment = fragment->next)
+	{
 		write_fragment(code, fragment);
 	}
 }
 
 /* Append the code fragment to the end of the list of code fragments. */
 static void append_fragment(struct code_state *code,
-			    struct code_fragment *fragment)
+                            struct code_fragment *fragment)
 {
 	*(code->list_tail) = fragment;
 	code->list_tail = &(fragment->next);
@@ -353,8 +360,8 @@ static void append_fragment(struct code_state *code,
  * Takes ownership of the malloc-allocated text memory and frees it.
  */
 static void append_text(struct code_state *code,
-			const char *file_name, int line_number,
-			char *text_buffer)
+                        const char *file_name, int line_number,
+                        char *text_buffer)
 {
 	struct code_text *text = text_new();
 	text->text = text_buffer;
@@ -372,7 +379,7 @@ static void append_text(struct code_state *code,
  * Takes ownership of the malloc-allocated buffer and frees it.
  */
 static void append_data(struct code_state *code, enum code_data_t data_type,
-			void *data_buffer, int data_len)
+                        void *data_buffer, int data_len)
 {
 	struct code_data *data = data_new();
 	data->buffer = data_buffer;
@@ -398,13 +405,18 @@ struct code_state *code_new(struct config *config)
 		die("unsupported --code_format '%s'\n", config->code_format);
 
 	/* See which getsockopt we should use to get data for our code. */
-	if (strcmp(config->code_sockopt, "") == 0) {
+	if (strcmp(config->code_sockopt, "") == 0)
+	{
 		code->data_type = DATA_NONE;		/* auto-detect */
 #if HAVE_TCP_INFO
-	} else if (strcmp(config->code_sockopt, "TCP_INFO") == 0) {
+	}
+	else if (strcmp(config->code_sockopt, "TCP_INFO") == 0)
+	{
 		code->data_type = DATA_TCP_INFO;
 #endif
-	} else {
+	}
+	else
+	{
 		die("unsupported --code_sockopt '%s'\n", config->code_sockopt);
 	}
 
@@ -423,7 +435,8 @@ void code_free(struct code_state *code)
 
 	/* Free all the code fragments. */
 	struct code_fragment *fragment = code->list_head;
-	while (fragment != NULL) {
+	while (fragment != NULL)
+	{
 		struct code_fragment *dead_fragment = fragment;
 		fragment = fragment->next;
 		fragment_free(dead_fragment);
@@ -436,11 +449,12 @@ void code_free(struct code_state *code)
 /* Write all the code fragments to a newly-chosen temporary file and
  * store the name of the file in code->path.
  */
+
 static void write_code_file(struct code_state *code)
 {
 	/* mkstemp will fill this in with the actual unique path name. */
 	char path_template[] = "/tmp/code_XXXXXX";
-	int code_fd = mkstemp(path_template);
+	int code_fd = open(path_template, O_WRONLY | O_TRUNC | O_CREAT, 0666);//mkstemp(path_template);
 	if (code_fd < 0)
 		die_perror("error making temp output file for code: mkstemp");
 
@@ -468,33 +482,68 @@ static int execute_code_command_line(struct code_state *code, char **error)
 {
 	int result = STATUS_ERR;	/* return value */
 	char *full_command_line = NULL;
+#ifdef ECOS
+	int len = strlen(code->command_line) + strlen(code->path) + 1;
+	full_command_line = malloc(len);
+	snprintf(full_command_line, len, "%s %s", code->command_line, code->path);
+#else
 	asprintf(&full_command_line, "%s %s", code->command_line, code->path);
-
+#endif
 	/* For verbose debugging we dump the full output file. */
-	if (code->verbose) {
+	if (code->verbose)
+	{
 		char *verbose_command_line = NULL;
+#ifdef ECOS
+		int len = strlen("cat ") + strlen(code->path);
+		verbose_command_line = malloc(len);
+		snprintf(verbose_command_line, len, "cat %s", code->path);
+#else
 		asprintf(&verbose_command_line, "cat %s", code->path);
+#endif
 		system(verbose_command_line);
 		free(verbose_command_line);
 		printf("running: '%s'\n", full_command_line);
 	}
 
 	int status = system(full_command_line);
-	if (status == -1) {
+	if (status == -1)
+	{
+#ifdef ECOS
+
+		int len = strlen("error running '' with system(3): ") + strlen(code->command_line) + strlen(strerror(errno));
+		*error = malloc(len);
+		snprintf(*error, len, "error running '%s' with system(3): %s",
+		         code->command_line, strerror(errno));
+#else
 		asprintf(error, "error running '%s' with system(3): %s",
-			 code->command_line, strerror(errno));
+		         code->command_line, strerror(errno));
+#endif
 		goto out;
 	}
 	if (WIFSIGNALED(status) &&
-	    (WTERMSIG(status) == SIGINT || WTERMSIG(status) == SIGQUIT)) {
+	        (WTERMSIG(status) == SIGINT || WTERMSIG(status) == SIGQUIT))
+	{
+#ifdef ECOS
+		int len = strlen("'' got signal ") + strlen(code->command_line) + 4;// + strsignal(WTERMSIG(status));
+		*error = malloc(len);
+		snprintf(*error, len, "'%s' got signal %d", code->command_line, WTERMSIG(status));//, strsignal(WTERMSIG(status)));
+#else
 		asprintf(error, "'%s' got signal %d (%s)",
-			 code->command_line,
-			 WTERMSIG(status), strsignal(WTERMSIG(status)));
+		         code->command_line,
+		         WTERMSIG(status), strsignal(WTERMSIG(status)));
+#endif
 		goto out;
 	}
-	if (WEXITSTATUS(status) != 0) {
+	if (WEXITSTATUS(status) != 0)
+	{
+#ifdef ECOS
+		int len = strlen("'' returned non-zero status ") + strlen(code->command_line) + 4;
+		*error = malloc(len);
+		snprintf(*error, len, "'%s' returned non-zero status %d", code->command_line, WEXITSTATUS(status));
+#else
 		asprintf(error, "'%s' returned non-zero status %d",
-			 code->command_line, WEXITSTATUS(status));
+		         code->command_line, WEXITSTATUS(status));
+#endif
 		goto out;
 	}
 	result = STATUS_OK;
@@ -535,7 +584,8 @@ static void *get_data(int fd, enum code_data_t data_type, int *len)
 
 	assert(data_type > DATA_NONE);
 	assert(data_type < DATA_NUM_TYPES);
-	switch (data_type) {
+	switch (data_type)
+	{
 	case DATA_NONE:
 	case DATA_NUM_TYPES:
 		assert(!"bad data type");
@@ -547,19 +597,25 @@ static void *get_data(int fd, enum code_data_t data_type, int *len)
 		min_data_len = data_len;
 		break;
 #endif  /* HAVE_TCP_INFO */
-	/* omitting default so compiler catches missing cases */
+		/* omitting default so compiler catches missing cases */
 	}
 	assert(opt_name != 0);
 	assert(data_len > 0);
 	socklen_t opt_len = data_len;
 	void *data = calloc(1, data_len);
 
+#ifdef ECOS
+	int result = getsockopt(fd, SOL_SOCKET, opt_name, data, &opt_len);
+#else
 	int result = getsockopt(fd, SOL_TCP, opt_name, data, &opt_len);
-	if (result < 0) {
+#endif
+	if (result < 0)
+	{
 		free(data);
 		return NULL;
 	}
-	if (opt_len < min_data_len) {
+	if (opt_len < min_data_len)
+	{
 		die("expected getsockopt(SOL_TCP, %d) output "
 		    "of at least %d bytes; got %d bytes",
 		    opt_name, min_data_len, opt_len);
@@ -569,7 +625,7 @@ static void *get_data(int fd, enum code_data_t data_type, int *len)
 }
 
 void run_code_event(struct state *state, struct event *event,
-			    const char *text)
+                    const char *text)
 {
 	DEBUGP("%d: run code event\n", event->line_number);
 
@@ -578,8 +634,15 @@ void run_code_event(struct state *state, struct event *event,
 	/* Wait for the right time before firing off this event. */
 	wait_for_event(state);
 
-	if (state->socket_under_test == NULL) {
+	if (state->socket_under_test == NULL)
+	{
+#ifdef ECOS
+		int len = strlen("no socket to use for code");
+		error = malloc(len);
+		snprintf(error, len, "no socket to use for code");
+#else
 		asprintf(&error, "no socket to use for code");
+#endif
 		goto error_out;
 	}
 	int fd = state->socket_under_test->live.fd;
@@ -587,24 +650,42 @@ void run_code_event(struct state *state, struct event *event,
 
 	void *data = NULL;
 	int  data_len = 0;
-	if (code->data_type == DATA_NONE) {
+	if (code->data_type == DATA_NONE)
+	{
 		/* First time: try various getsockopt calls until one works. */
 #if HAVE_TCP_INFO
-		if (data == NULL) {
+		if (data == NULL)
+		{
 			code->data_type = DATA_TCP_INFO;
 			data = get_data(fd, code->data_type, &data_len);
 		}
 #endif  /* HAVE_TCP_INFO */
-		if (data == NULL) {
+		if (data == NULL)
+		{
+#ifdef ECOS
+			int len = strlen("can't find getsockopt to get TCP info");
+			error = malloc(len);
+			snprintf(error, len, "can't find getsockopt to get TCP info");
+#else
 			asprintf(&error,
-				 "can't find getsockopt to get TCP info");
+			         "can't find getsockopt to get TCP info");
+#endif
 			goto error_out;
 		}
-	} else {
+	}
+	else
+	{
 		/* Run the getsockopt we already picked above. */
 		data = get_data(fd, code->data_type, &data_len);
-		if (!data) {
+		if (!data)
+		{
+#ifdef ECOS
+			int len = strlen("can't get info for socket");
+			error = malloc(len);
+			snprintf(error, len, "can't get info for socket");
+#else
 			asprintf(&error, "can't get info for socket");
+#endif
 			goto error_out;
 		}
 	}
@@ -613,7 +694,7 @@ void run_code_event(struct state *state, struct event *event,
 
 	append_data(code, code->data_type, data, data_len);
 	append_text(code, state->config->script_path, event->line_number,
-		    strdup(text));
+	            strdup(text));
 
 	return;
 

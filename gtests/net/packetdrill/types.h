@@ -51,6 +51,7 @@
 #endif
 
 /* We use kernel-style names for standard integer types. */
+#ifndef ECOS
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -65,7 +66,7 @@ typedef u8 __u8;
 typedef u16 __u16;
 typedef u32 __u32;
 typedef u64 __u64;
-
+#endif
 /* We also use kernel-style names for endian-specific unsigned types. */
 typedef u16 __le16;
 typedef u16 __be16;
@@ -77,25 +78,32 @@ typedef u64 __be64;
 typedef u16 __sum16;
 typedef u32 __wsum;
 
+#ifndef ECOS
 typedef u8 bool;
-enum bool_t {
+
+enum bool_t
+{
 	false = 0,
 	true = 1,
 };
+
+#endif
 
 #define ARRAY_SIZE(array_name)  (sizeof(array_name) / sizeof(array_name[0]))
 
 /* Most functions in this codebase return one of these two values to let the
  * caller know whether there was a problem.
  */
-enum status_t {
+enum status_t
+{
 	STATUS_OK  = 0,
 	STATUS_ERR = -1,
 	STATUS_WARN = -2,	/* a non-fatal error or warning */
 };
 
 /* The directions in which a packet may flow. */
-enum direction_t {
+enum direction_t
+{
 	DIRECTION_INVALID,
 	DIRECTION_INBOUND,	/* packet coming into the kernel under test */
 	DIRECTION_OUTBOUND,	/* packet leaving the kernel under test */
@@ -113,7 +121,8 @@ static inline enum direction_t reverse_direction(enum direction_t direction)
 }
 
 /* IPv4 ECN treatment for a packet. */
-enum ip_ecn_t {
+enum ip_ecn_t
+{
 	ECN_NONE,
 	ECN_ECT0,
 	ECN_ECT1,
@@ -126,7 +135,8 @@ enum ip_ecn_t {
 #define ADDR_STR_LEN ((INET_ADDRSTRLEN + INET6_ADDRSTRLEN)+5)
 
 /* Flavors of IP versions we support. */
-enum ip_version_t {
+enum ip_version_t
+{
 	/* Native IPv4, with AF_INET sockets and IPv4 addresses. */
 	IP_VERSION_4		= 0,
 

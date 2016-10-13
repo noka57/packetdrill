@@ -1,7 +1,6 @@
 all: binaries
 
-CFLAGS = -g -Wall -Werror -DECOS -I/cygdrive/c/cygwin/E2500_install/include
-CC = /opt/ecos/gnutools/arm-elf/bin/arm-elf-gcc.exe
+CFLAGS = -g -Wall -Werror
 
 parser.o: parser.y
 	bison --output=parser.c --defines=parser.h --report=state parser.y
