@@ -28,32 +28,49 @@
 #include "udp.h"
 
 struct packet *new_udp_packet(int address_family,
-			       enum direction_t direction,
-			       u16 udp_payload_bytes,
-			       char **error)
+                              enum direction_t direction,
+                              u16 udp_payload_bytes,
+                              char **error)
 {
 	struct packet *packet = NULL;  /* the newly-allocated result packet */
 	struct header *udp_header = NULL;  /* the UDP header info */
 	/* Calculate lengths in bytes of all sections of the packet */
 	const int ip_option_bytes = 0;
 	const int ip_header_bytes = (ip_header_min_len(address_family) +
-				     ip_option_bytes);
+	                             ip_option_bytes);
 	const int udp_header_bytes = sizeof(struct udp);
 	const int ip_bytes =
-		 ip_header_bytes + udp_header_bytes + udp_payload_bytes;
+	    ip_header_bytes + udp_header_bytes + udp_payload_bytes;
 
 	/* Sanity-check all the various lengths */
-	if (ip_option_bytes & 0x3) {
+	if (ip_option_bytes & 0x3)
+	{
+
+#ifdef ECOS
+		int len = strlen("IP options are not padded correctly ") + strlen("to ensure IP header is a multiple of 4 bytes: ") + strlen(" excess bytes") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "IP options are not padded correctly "
+		         "to ensure IP header is a multiple of 4 bytes: "
+		         "%d excess bytes", ip_option_bytes & 0x3);
+#else
 		asprintf(error, "IP options are not padded correctly "
-			 "to ensure IP header is a multiple of 4 bytes: "
-			 "%d excess bytes", ip_option_bytes & 0x3);
+		         "to ensure IP header is a multiple of 4 bytes: "
+		         "%d excess bytes", ip_option_bytes & 0x3);
+#endif
 		return NULL;
 	}
 	assert((udp_header_bytes & 0x3) == 0);
 	assert((ip_header_bytes & 0x3) == 0);
 
-	if (ip_bytes > MAX_UDP_DATAGRAM_BYTES) {
+	if (ip_bytes > MAX_UDP_DATAGRAM_BYTES)
+	{
+#ifdef ECOS
+		int len = strlen("UDP datagram too large");
+		*error = malloc(len);
+		snprintf(*error, len, "UDP datagram too large");
+#else
 		asprintf(error, "UDP datagram too large");
+#endif
 		return NULL;
 	}
 
@@ -67,10 +84,10 @@ struct packet *new_udp_packet(int address_family,
 
 	/* Set IP header fields */
 	set_packet_ip_header(packet, address_family, ip_bytes,
-			     packet->ecn, IPPROTO_UDP);
+	                     packet->ecn, IPPROTO_UDP);
 
 	udp_header = packet_append_header(packet, HEADER_UDP,
-					  sizeof(struct udp));
+	                                  sizeof(struct udp));
 	udp_header->total_bytes = udp_header_bytes + udp_payload_bytes;
 
 	/* Find the start of UDP section of the packet */
