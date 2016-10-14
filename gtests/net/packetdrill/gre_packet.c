@@ -32,8 +32,15 @@ int gre_header_append(struct packet *packet, char **error)
 	struct header *header;
 
 	header = packet_append_header(packet, HEADER_GRE, sizeof(struct gre));
-	if (header == NULL) {
+	if (header == NULL)
+	{
+#ifdef ECOS
+		int len = strlen("too many headers");
+		*error = malloc(len);
+		snprintf(*error, len, "too many headers");
+#else
 		asprintf(error, "too many headers");
+#endif
 		return STATUS_ERR;
 	}
 
@@ -41,7 +48,7 @@ int gre_header_append(struct packet *packet, char **error)
 }
 
 int gre_header_finish(struct packet *packet,
-		      struct header *header, struct header *next_inner)
+                      struct header *header, struct header *next_inner)
 {
 	struct gre *gre = header->h.gre;
 	int gre_bytes = sizeof(struct gre) + next_inner->total_bytes;

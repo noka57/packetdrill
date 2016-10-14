@@ -66,7 +66,8 @@ static const int PACKET_READ_BYTES = 64 * 1024;
  * gives the total space in the buffer, which may be bigger than the
  * actual amount occupied by the packet data.
  */
-struct packet {
+struct packet
+{
 	u8 *buffer;		/* data buffer: full contents of packet */
 	u32 buffer_bytes;	/* bytes of space in data buffer */
 	u32 l2_header_bytes;	/* bytes in outer hardware/layer-2 header */
@@ -134,18 +135,18 @@ static inline struct header *packet_inner_header(struct packet *packet)
  * header.
  */
 extern struct header *packet_append_header(struct packet *packet,
-					   enum header_t header_type,
-					   int header_bytes);
+                                           enum header_t header_type,
+                                           int header_bytes);
 
 /* Return a newly-allocated packet that is a copy of the given inner packet
  * but with the given outer packet prepended.
  */
 extern struct packet *packet_encapsulate(struct packet *outer,
-					 struct packet *inner);
+                                         struct packet *inner);
 
 /* Encapsulate a packet and free the original outer and inner packets. */
 static inline struct packet *packet_encapsulate_and_free(struct packet *outer,
-							 struct packet *inner)
+                                                         struct packet *inner)
 {
 	struct packet *packet = packet_encapsulate(outer, inner);
 	packet_free(outer);
@@ -201,7 +202,10 @@ static inline int ip_header_min_len(int address_family)
 	else if (address_family == AF_INET6)
 		return sizeof(struct ipv6);
 	else
+	{
 		assert(!"bad ip_version in config");
+		return 0;
+	}
 }
 
 /* Return the layer4 protocol of the packet. */
@@ -312,14 +316,14 @@ static inline u8 *packet_echoed_ip_header(struct packet *packet)
 static inline struct ipv4 *packet_echoed_ipv4_header(struct packet *packet)
 {
 	return (struct ipv4 *)((packet->icmpv4 != NULL) ?
-			       (packet->icmpv4 + 1) : NULL);
+	                       (packet->icmpv4 + 1) : NULL);
 }
 
 /* Return the location of the IPv6 header echoed by an ICMP message, or NULL. */
 static inline struct ipv6 *packet_echoed_ipv6_header(struct packet *packet)
 {
 	return (struct ipv6 *)((packet->icmpv6 != NULL) ?
-			       (packet->icmpv6 + 1) : NULL);
+	                       (packet->icmpv6 + 1) : NULL);
 }
 
 /* Return the length in bytes of the IP header echoed by an ICMP message.

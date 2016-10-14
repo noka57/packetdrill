@@ -29,20 +29,23 @@
 #include "ip_packet.h"
 
 /* A table entry mapping an ICMP code string to byte. */
-struct icmp_code_info {
+struct icmp_code_info
+{
 	u8 code_byte;				/* type byte on the wire */
 	const char *code_string;		/* human-readable code */
 };
 
 /* A table entry mapping an ICMP type string to byte and code table. */
-struct icmp_type_info {
+struct icmp_type_info
+{
 	u8 type_byte;				  /* type byte on the wire */
 	const char *type_string;		  /* human-readable type */
 	const struct icmp_code_info *code_table;  /* codes for this type */
 };
 
 /* Values for the 'code' byte of an IPv4 ICMP_DEST_UNREACH header (RFC 1700). */
-struct icmp_code_info icmpv4_unreachable_codes[] = {
+struct icmp_code_info icmpv4_unreachable_codes[] =
+{
 	{ ICMP_NET_UNREACH,	"net_unreachable" },
 	{ ICMP_HOST_UNREACH,	"host_unreachable" },
 	{ ICMP_PROT_UNREACH,	"protocol_unreachable" },
@@ -63,7 +66,8 @@ struct icmp_code_info icmpv4_unreachable_codes[] = {
 };
 
 /* Information about the supported types of ICMPv4 header (RFC 1700). */
-struct icmp_type_info icmpv4_types[] = {
+struct icmp_type_info icmpv4_types[] =
+{
 	{ ICMP_ECHOREPLY,	"echo_reply" },
 	{ ICMP_DEST_UNREACH,	"unreachable", icmpv4_unreachable_codes },
 	{ ICMP_SOURCE_QUENCH,	"source_quench" },
@@ -81,7 +85,8 @@ struct icmp_type_info icmpv4_types[] = {
 };
 
 /* Values for the 'code' byte of an ICMPV6_DEST_UNREACH header (RFC 2463). */
-struct icmp_code_info icmpv6_unreachable_codes[] = {
+struct icmp_code_info icmpv6_unreachable_codes[] =
+{
 	{ ICMP_NET_UNREACH,		"net_unreachable" },
 	{ ICMPV6_NOROUTE,		"no_route" },
 	{ ICMPV6_ADM_PROHIBITED,	"admin_prohibited" },
@@ -92,14 +97,16 @@ struct icmp_code_info icmpv6_unreachable_codes[] = {
 };
 
 /* Values for the 'code' byte of an ICMPV6_TIME_EXCEED header (RFC 2463). */
-struct icmp_code_info icmpv6_time_exceed_codes[] = {
+struct icmp_code_info icmpv6_time_exceed_codes[] =
+{
 	{ ICMPV6_EXC_HOPLIMIT,		"exceeded_hop_limit" },
 	{ ICMPV6_EXC_FRAGTIME,		"exceeded_frag_time" },
 	{ 0, NULL },
 };
 
 /* Values for the 'code' byte of an ICMPV6_PARAMPROB header (RFC 2463). */
-struct icmp_code_info icmpv6_paramprob_codes[] = {
+struct icmp_code_info icmpv6_paramprob_codes[] =
+{
 	{ ICMPV6_HDR_FIELD,		"header_field" },
 	{ ICMPV6_UNK_NEXTHDR,		"unknown_next_header" },
 	{ ICMPV6_UNK_OPTION,		"unknown_option" },
@@ -107,7 +114,8 @@ struct icmp_code_info icmpv6_paramprob_codes[] = {
 };
 
 /* Information about the supported types of ICMPv6 header (RFC 2463). */
-struct icmp_type_info icmpv6_types[] = {
+struct icmp_type_info icmpv6_types[] =
+{
 	{ ICMPV6_DEST_UNREACH,	"unreachable", icmpv6_unreachable_codes },
 	{ ICMPV6_PKT_TOOBIG,	"packet_too_big" },
 	{ ICMPV6_TIME_EXCEED,	"time_exceeded", icmpv6_time_exceed_codes },
@@ -141,21 +149,37 @@ static int icmp_header_len(int address_family)
 
 /* Fill in ICMPv4 header fields. */
 static int set_icmpv4_header(struct icmpv4 *icmpv4,
-			     u8 type, u8 code, s64 mtu, char **error)
+                             u8 type, u8 code, s64 mtu, char **error)
 {
 	icmpv4->type = type;
 	icmpv4->code = code;
 	icmpv4->checksum = htons(0);
 
-	if (mtu >= 0) {
-		if ((type != ICMP_DEST_UNREACH) || (code != ICMP_FRAG_NEEDED)) {
+	if (mtu >= 0)
+	{
+		if ((type != ICMP_DEST_UNREACH) || (code != ICMP_FRAG_NEEDED))
+		{
+#ifdef ECOS
+			int len = strlen("ICMPv4 MTU is only valid for ") + strlen("unreachable-frag_needed");
+			*error = malloc(len);
+			snprintf(*error, len, "ICMPv4 MTU is only valid for "
+			         "unreachable-frag_needed");
+#else
 			asprintf(error,
-				 "ICMPv4 MTU is only valid for "
-				 "unreachable-frag_needed");
+			         "ICMPv4 MTU is only valid for "
+			         "unreachable-frag_needed");
+#endif
 			return STATUS_ERR;
 		}
-		if (!is_valid_u16(mtu)) {
+		if (!is_valid_u16(mtu))
+		{
+#ifdef ECOS
+			int len = strlen("ICMPv4 MTU out of 16-bit range");
+			*error = malloc(len);
+			snprintf(*error, len, "ICMPv4 MTU out of 16-bit range");
+#else
 			asprintf(error, "ICMPv4 MTU out of 16-bit range");
+#endif
 			return STATUS_ERR;
 		}
 		icmpv4->message.frag.mtu = htons(mtu);
@@ -166,21 +190,37 @@ static int set_icmpv4_header(struct icmpv4 *icmpv4,
 
 /* Fill in ICMPv4 header fields. */
 static int set_icmpv6_header(struct icmpv6 *icmpv6,
-			     u8 type, u8 code, s64 mtu, char **error)
+                             u8 type, u8 code, s64 mtu, char **error)
 {
 	icmpv6->type = type;
 	icmpv6->code = code;
 	icmpv6->checksum = htons(0);
 
-	if (mtu >= 0) {
-		if ((type != ICMPV6_PKT_TOOBIG) || (code != 0)) {
+	if (mtu >= 0)
+	{
+		if ((type != ICMPV6_PKT_TOOBIG) || (code != 0))
+		{
+#ifdef ECOS
+			int len = strlen("ICMPv6 MTU is only valid for ") + strlen("packet_too_big-0");
+			*error = malloc(len);
+			snprintf(*error, len, "ICMPv6 MTU is only valid for "
+			         "packet_too_big-0");
+#else
 			asprintf(error,
-				 "ICMPv6 MTU is only valid for "
-				 "packet_too_big-0");
+			         "ICMPv6 MTU is only valid for "
+			         "packet_too_big-0");
+#endif
 			return STATUS_ERR;
 		}
-		if (!is_valid_u32(mtu)) {
+		if (!is_valid_u32(mtu))
+		{
+#ifdef ECOS
+			int len = strlen("ICMPv6 MTU out of 32-bit range");
+			*error = malloc(len);
+			snprintf(*error, len, "ICMPv6 MTU out of 32-bit range");
+#else
 			asprintf(error, "ICMPv6 MTU out of 32-bit range");
+#endif
 			return STATUS_ERR;
 		}
 		icmpv6->message.packet_too_big.mtu = htonl(mtu);
@@ -190,28 +230,33 @@ static int set_icmpv6_header(struct icmpv6 *icmpv6,
 
 /* Populate ICMP header fields. */
 static int set_packet_icmp_header(struct packet *packet, void *icmp,
-				  int address_family, int icmp_bytes,
-				  u8 type, u8 code, s64 mtu, char **error)
+                                  int address_family, int icmp_bytes,
+                                  u8 type, u8 code, s64 mtu, char **error)
 {
 	struct header *icmp_header = NULL;
 
-	if (address_family == AF_INET) {
+	if (address_family == AF_INET)
+	{
 		struct icmpv4 *icmpv4 = (struct icmpv4 *) icmp;
 		packet->icmpv4 = icmpv4;
 		assert(packet->icmpv6 == NULL);
 		icmp_header = packet_append_header(packet, HEADER_ICMPV4,
-						   sizeof(*icmpv4));
+		                                   sizeof(*icmpv4));
 		icmp_header->total_bytes = icmp_bytes;
 		return set_icmpv4_header(icmpv4, type, code, mtu, error);
-	} else if (address_family == AF_INET6) {
+	}
+	else if (address_family == AF_INET6)
+	{
 		struct icmpv6 *icmpv6 = (struct icmpv6 *) icmp;
 		packet->icmpv6 = icmpv6;
 		assert(packet->icmpv4 == NULL);
 		icmp_header = packet_append_header(packet, HEADER_ICMPV6,
-						   sizeof(*icmpv6));
+		                                   sizeof(*icmpv6));
 		icmp_header->total_bytes = icmp_bytes;
 		return set_icmpv6_header(icmpv6, type, code, mtu, error);
-	} else {
+	}
+	else
+	{
 		assert(!"bad ip_version in config");
 	}
 	return STATUS_ERR;
@@ -223,9 +268,9 @@ static int set_packet_icmp_header(struct packet *packet, void *icmp,
  * STATUS_OK.
  */
 static int parse_icmp_type_and_code(int address_family,
-				    const char *type_string,
-				    const char *code_string,
-				    s32 *type, s32 *code, char **error)
+                                    const char *type_string,
+                                    const char *code_string,
+                                    s32 *type, s32 *code, char **error)
 {
 	int i = 0;
 	const struct icmp_type_info *icmp_types = NULL;
@@ -239,36 +284,62 @@ static int parse_icmp_type_and_code(int address_family,
 		assert(!"bad ip_version in config");
 
 	/* Parse the type string. */
-	if (sscanf(type_string, "type_%d", type) == 1) {
+	if (sscanf(type_string, "type_%d", type) == 1)
+	{
 		/* Legal but non-standard type in tcpdump-inspired notation. */
-	} else {
+	}
+	else
+	{
 		/* Look in our table of known types. */
-		for (i = 0; icmp_types[i].type_string != NULL; ++i) {
-			if (!strcmp(type_string, icmp_types[i].type_string)) {
+		for (i = 0; icmp_types[i].type_string != NULL; ++i)
+		{
+			if (!strcmp(type_string, icmp_types[i].type_string))
+			{
 				*type = icmp_types[i].type_byte;
 				code_table = icmp_types[i].code_table;
 			}
 		}
 	}
-	if (!is_valid_u8(*type)) {
+	if (!is_valid_u8(*type))
+	{
+
+#ifdef ECOS
+		int len = strlen("bad ICMP type ") + strlen(type_string);
+		*error = malloc(len);
+		snprintf(*error, len, "bad ICMP type %s", type_string);
+#else
 		asprintf(error, "bad ICMP type %s", type_string);
+#endif
 		return STATUS_ERR;
 	}
 
 	/* Parse the code string. */
-	if (code_string == NULL) {
+	if (code_string == NULL)
+	{
 		*code = 0;		/* missing code means code = 0 */
-	} else if (sscanf(code_string, "code_%d", code) == 1) {
+	}
+	else if (sscanf(code_string, "code_%d", code) == 1)
+	{
 		/* Legal but non-standard code in tcpdump-inspired notation. */
-	} else if (code_table != NULL) {
+	}
+	else if (code_table != NULL)
+	{
 		/* Look in our table of known codes. */
-		for (i = 0; code_table[i].code_string != NULL; ++i) {
+		for (i = 0; code_table[i].code_string != NULL; ++i)
+		{
 			if (!strcmp(code_string, code_table[i].code_string))
 				*code = code_table[i].code_byte;
 		}
 	}
-	if (!is_valid_u8(*code)) {
+	if (!is_valid_u8(*code))
+	{
+#ifdef ECOS
+		int len = strlen("bad ICMP code ") + strlen(code_string);
+		*error = malloc(len);
+		snprintf(*error, len, "bad ICMP code %s", code_string);
+#else
 		asprintf(error, "bad ICMP code %s", code_string);
+#endif
 		return STATUS_ERR;
 	}
 
@@ -276,14 +347,14 @@ static int parse_icmp_type_and_code(int address_family,
 }
 
 struct packet *new_icmp_packet(int address_family,
-				enum direction_t direction,
-				const char *type_string,
-				const char *code_string,
-				int protocol,
-				u32 tcp_start_sequence,
-				u32 payload_bytes,
-				s64 mtu,
-				char **error)
+                               enum direction_t direction,
+                               const char *type_string,
+                               const char *code_string,
+                               int protocol,
+                               u32 tcp_start_sequence,
+                               u32 payload_bytes,
+                               s64 mtu,
+                               char **error)
 {
 	s32 type = -1;	/* bad type; means "unknown so far" */
 	s32 code = -1;	/* bad code; means "unknown so far" */
@@ -303,17 +374,26 @@ struct packet *new_icmp_packet(int address_family,
 	const int ip_bytes = ip_header_bytes + icmp_bytes;
 
 	/* Sanity-check all the various lengths */
-	if (ip_option_bytes & 0x3) {
+	if (ip_option_bytes & 0x3)
+	{
+#ifdef ECOS
+		int len = 8 + strlen("IP options are not padded correctly ") + strlen("to ensure IP header is a multiple of 4 bytes: ") + strlen(" excess bytes");
+		*error = malloc(len);
+		snprintf(*error, len, "IP options are not padded correctly "
+		         "to ensure IP header is a multiple of 4 bytes: "
+		         "%d excess bytes", ip_option_bytes & 0x3);
+#else
 		asprintf(error, "IP options are not padded correctly "
-			 "to ensure IP header is a multiple of 4 bytes: "
-			 "%d excess bytes", ip_option_bytes & 0x3);
+		         "to ensure IP header is a multiple of 4 bytes: "
+		         "%d excess bytes", ip_option_bytes & 0x3);
+#endif
 		goto error_out;
 	}
 	assert((ip_header_bytes & 0x3) == 0);
 
 	/* Parse the ICMP type and code */
 	if (parse_icmp_type_and_code(address_family, type_string, code_string,
-				     &type, &code, error))
+	                             &type, &code, error))
 		goto error_out;
 	assert(is_valid_u8(type));
 	assert(is_valid_u8(code));
@@ -329,12 +409,12 @@ struct packet *new_icmp_packet(int address_family,
 	/* Set IP header fields */
 	const enum ip_ecn_t ecn = ECN_NONE;
 	set_packet_ip_header(packet, address_family, ip_bytes, ecn,
-			     icmp_protocol(address_family));
+	                     icmp_protocol(address_family));
 
 	/* Find the start of the ICMP header and then populate common fields. */
 	void *icmp_header = ip_start(packet) + ip_header_bytes;
 	if (set_packet_icmp_header(packet, icmp_header, address_family,
-				   icmp_bytes, type, code, mtu, error))
+	                           icmp_bytes, type, code, mtu, error))
 		goto error_out;
 
 	/* All ICMP message types currently supported by this tool
@@ -347,11 +427,12 @@ struct packet *new_icmp_packet(int address_family,
 	 */
 	u8 *echoed_ip = packet_echoed_ip_header(packet);
 	const int echoed_ip_bytes = (ip_fixed_bytes +
-				     layer4_header_len(protocol) +
-				     payload_bytes);
+	                             layer4_header_len(protocol) +
+	                             payload_bytes);
 	set_ip_header(echoed_ip, address_family, echoed_ip_bytes,
-		      ecn, protocol);
-	if (protocol == IPPROTO_TCP) {
+	              ecn, protocol);
+	if (protocol == IPPROTO_TCP)
+	{
 		u32 *seq = packet_echoed_tcp_seq(packet);
 		*seq = htonl(tcp_start_sequence);
 	}
