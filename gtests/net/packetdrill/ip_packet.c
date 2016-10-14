@@ -28,6 +28,10 @@
 #include "ip.h"
 #include "ipv6.h"
 
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#endif
+
 /* Return the ECN header bits for the given ECN treatment. */
 static u8 ip_ecn_bits(enum ip_ecn_t ecn)
 {
@@ -43,8 +47,8 @@ static u8 ip_ecn_bits(enum ip_ecn_t ecn)
 
 /* Fill in IPv4 header fields. */
 static void set_ipv4_header(struct ipv4 *ipv4,
-			    u16 ip_bytes,
-			    enum ip_ecn_t ecn, u8 protocol)
+                            u16 ip_bytes,
+                            enum ip_ecn_t ecn, u8 protocol)
 {
 	ipv4->version = 4;
 	ipv4->ihl = sizeof(struct ipv4) / sizeof(u32);
@@ -63,8 +67,8 @@ static void set_ipv4_header(struct ipv4 *ipv4,
 
 /* Fill in IPv6 header fields. */
 static void set_ipv6_header(struct ipv6 *ipv6,
-			    u16 ip_bytes,
-			    enum ip_ecn_t ecn, u8 protocol)
+                            u16 ip_bytes,
+                            enum ip_ecn_t ecn, u8 protocol)
 {
 	ipv6->version = 6;
 	ipv6->traffic_class_hi = 0;
@@ -82,9 +86,9 @@ static void set_ipv6_header(struct ipv6 *ipv6,
 }
 
 void set_ip_header(void *ip_header,
-		   int address_family,
-		   u16 ip_bytes,
-		   enum ip_ecn_t ecn, u8 protocol)
+                   int address_family,
+                   u16 ip_bytes,
+                   enum ip_ecn_t ecn, u8 protocol)
 {
 	if (address_family == AF_INET)
 		set_ipv4_header(ip_header, ip_bytes, ecn, protocol);
@@ -95,58 +99,84 @@ void set_ip_header(void *ip_header,
 }
 
 void set_packet_ip_header(struct packet *packet,
-			  int address_family,
-			  u16 ip_bytes,
-			  enum ip_ecn_t ecn, u8 protocol)
+                          int address_family,
+                          u16 ip_bytes,
+                          enum ip_ecn_t ecn, u8 protocol)
 {
 	struct header *ip_header = NULL;
 
-	if (address_family == AF_INET) {
+	if (address_family == AF_INET)
+	{
 		struct ipv4 *ipv4 = (struct ipv4 *) packet->buffer;
 		packet->ipv4 = ipv4;
 		assert(packet->ipv6 == NULL);
 		ip_header = packet_append_header(packet, HEADER_IPV4,
-						 sizeof(*ipv4));
+		                                 sizeof(*ipv4));
 		ip_header->total_bytes = ip_bytes;
 		set_ipv4_header(ipv4, ip_bytes, ecn, protocol);
-	} else if (address_family == AF_INET6) {
+	}
+	else if (address_family == AF_INET6)
+	{
 		struct ipv6 *ipv6 = (struct ipv6 *) packet->buffer;
 		packet->ipv6 = ipv6;
 		assert(packet->ipv4 == NULL);
 		ip_header = packet_append_header(packet, HEADER_IPV6,
-						 sizeof(*ipv6));
+		                                 sizeof(*ipv6));
 		ip_header->total_bytes = ip_bytes;
 		set_ipv6_header(ipv6, ip_bytes, ecn, protocol);
-	} else {
+	}
+	else
+	{
 		assert(!"bad ip_version in config");
 	}
 }
 
 int ipv4_header_append(struct packet *packet,
-		       const char *ip_src,
-		       const char *ip_dst,
-		       char **error)
+                       const char *ip_src,
+                       const char *ip_dst,
+                       char **error)
 {
 	struct header *header = NULL;
 	const int ipv4_bytes = sizeof(struct ipv4);
 	struct ipv4 *ipv4 = NULL;
 
 	header = packet_append_header(packet, HEADER_IPV4, ipv4_bytes);
-	if (header == NULL) {
+	if (header == NULL)
+	{
+#ifdef ECOS
+		int len = strlen("too many headers");
+		*error = malloc(len);
+		snprintf(*error, len, "too many headers");
+#else
 		asprintf(error, "too many headers");
+#endif
 		return STATUS_ERR;
 	}
 
 	ipv4 = header->h.ipv4;
 	set_ip_header(ipv4, AF_INET, 0, ECN_NONE, 0);
 
-	if (inet_pton(AF_INET, ip_src, &ipv4->src_ip) != 1) {
+	if (inet_pton(AF_INET, ip_src, &ipv4->src_ip) != 1)
+	{
+#ifdef ECOS
+		int len = strlen("bad IPv4 src address: ''\n") + strlen(ip_src);
+		*error = malloc(len);
+		snprintf(*error, len, "bad IPv4 src address: '%s'\n", ip_src);
+#else
 		asprintf(error, "bad IPv4 src address: '%s'\n", ip_src);
+#endif
 		return STATUS_ERR;
 	}
 
-	if (inet_pton(AF_INET, ip_dst, &ipv4->dst_ip) != 1) {
+	if (inet_pton(AF_INET, ip_dst, &ipv4->dst_ip) != 1)
+	{
+#ifdef ECOS
+		int len = strlen("bad IPv4 dst address: ''\n") + strlen(ip_dst);
+		*error = malloc(len);
+		snprintf(*error, len, "bad IPv4 dst address: '%s'\n", ip_dst);
+#else
 		asprintf(error, "bad IPv4 dst address: '%s'\n", ip_dst);
+#endif
 		return STATUS_ERR;
 	}
 
@@ -154,30 +184,51 @@ int ipv4_header_append(struct packet *packet,
 }
 
 int ipv6_header_append(struct packet *packet,
-		       const char *ip_src,
-		       const char *ip_dst,
-		       char **error)
+                       const char *ip_src,
+                       const char *ip_dst,
+                       char **error)
 {
 	struct header *header = NULL;
 	const int ipv6_bytes = sizeof(struct ipv6);
 	struct ipv6 *ipv6 = NULL;
 
 	header = packet_append_header(packet, HEADER_IPV6, ipv6_bytes);
-	if (header == NULL) {
+	if (header == NULL)
+	{
+#ifdef ECOS
+		int len = strlen("too many headers");
+		*error = malloc(len);
+		snprintf(*error, len, "too many headers");
+#else
 		asprintf(error, "too many headers");
+#endif
 		return STATUS_ERR;
 	}
 
 	ipv6 = header->h.ipv6;
 	set_ip_header(ipv6, AF_INET6, sizeof(struct ipv6), ECN_NONE, 0);
 
-	if (inet_pton(AF_INET6, ip_src, &ipv6->src_ip) != 1) {
+	if (inet_pton(AF_INET6, ip_src, &ipv6->src_ip) != 1)
+	{
+#ifdef ECOS
+		int len = strlen("bad IPv6 src address: ''\n") + strlen(ip_src);
+		*error = malloc(len);
+		snprintf(*error, len, "bad IPv6 src address: '%s'\n", ip_src);
+#else
 		asprintf(error, "bad IPv6 src address: '%s'\n", ip_src);
+#endif
 		return STATUS_ERR;
 	}
 
-	if (inet_pton(AF_INET6, ip_dst, &ipv6->dst_ip) != 1) {
+	if (inet_pton(AF_INET6, ip_dst, &ipv6->dst_ip) != 1)
+	{
+#ifdef ECOS
+		int len = strlen("bad IPv6 dst address: ''\n") + strlen(ip_dst);
+		*error = malloc(len);
+		snprintf(*error, len, "bad IPv6 dst address: '%s'\n", ip_dst);
+#else
 		asprintf(error, "bad IPv6 dst address: '%s'\n", ip_dst);
+#endif
 		return STATUS_ERR;
 	}
 
@@ -185,7 +236,7 @@ int ipv6_header_append(struct packet *packet,
 }
 
 int ipv4_header_finish(struct packet *packet,
-		       struct header *header, struct header *next_inner)
+                       struct header *header, struct header *next_inner)
 {
 	struct ipv4 *ipv4 = header->h.ipv4;
 	int ip_bytes = sizeof(struct ipv4) + next_inner->total_bytes;
@@ -203,7 +254,7 @@ int ipv4_header_finish(struct packet *packet,
 }
 
 int ipv6_header_finish(struct packet *packet,
-		       struct header *header, struct header *next_inner)
+                       struct header *header, struct header *next_inner)
 {
 	struct ipv6 *ipv6 = header->h.ipv6;
 	int ip_bytes = sizeof(struct ipv6) + next_inner->total_bytes;
