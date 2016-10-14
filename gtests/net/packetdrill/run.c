@@ -31,7 +31,9 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef ECOS
 #include <sys/mman.h>
+#endif
 #include <sys/socket.h>
 #include <sys/times.h>
 #include <unistd.h>
@@ -65,8 +67,8 @@
 const int MAX_SPIN_USECS = 20;
 
 struct state *state_new(struct config *config,
-			struct script *script,
-			struct netdev *netdev)
+                        struct script *script,
+                        struct netdev *netdev)
 {
 	struct state *state = calloc(1, sizeof(struct state));
 
@@ -94,8 +96,10 @@ struct state *state_new(struct config *config,
 static void close_all_sockets(struct state *state)
 {
 	struct socket *socket = state->sockets;
-	while (socket != NULL) {
-		if (socket->live.fd >= 0 && !socket->is_closed) {
+	while (socket != NULL)
+	{
+		if (socket->live.fd >= 0 && !socket->is_closed)
+		{
 			assert(socket->script.fd >= 0);
 			DEBUGP("closing struct state socket "
 			       "live.fd:%d script.fd:%d\n",
@@ -104,8 +108,9 @@ static void close_all_sockets(struct state *state)
 				die_perror("close");
 		}
 		if (socket->protocol == IPPROTO_TCP &&
-		    !state->config->is_wire_client &&
-		    reset_connection(state, socket)) {
+		        !state->config->is_wire_client &&
+		        reset_connection(state, socket))
+		{
 			die("error reseting connection\n");
 		}
 		struct socket *dead_socket = socket;
@@ -156,12 +161,12 @@ s64 now_usecs(void)
  * checking.
  */
 int verify_time(struct state *state, enum event_time_t time_type,
-		s64 script_usecs, s64 script_usecs_end,
-		s64 live_usecs, const char *description, char **error)
+                s64 script_usecs, s64 script_usecs_end,
+                s64 live_usecs, const char *description, char **error)
 {
 	s64 expected_usecs = script_usecs - state->script_start_time_usecs;
 	s64 expected_usecs_end = script_usecs_end -
-		state->script_start_time_usecs;
+	                         state->script_start_time_usecs;
 	s64 actual_usecs = live_usecs - state->live_start_time_usecs;
 	int tolerance_usecs = state->config->tolerance_usecs;
 
@@ -172,50 +177,97 @@ int verify_time(struct state *state, enum event_time_t time_type,
 		return STATUS_OK;
 
 	if (time_type == ABSOLUTE_RANGE_TIME ||
-	    time_type == RELATIVE_RANGE_TIME) {
+	        time_type == RELATIVE_RANGE_TIME)
+	{
 		DEBUGP("expected_usecs_end %.3f\n",
 		       usecs_to_secs(script_usecs_end));
 		if (actual_usecs < (expected_usecs - tolerance_usecs) ||
-		    actual_usecs > (expected_usecs_end + tolerance_usecs)) {
-			if (time_type == ABSOLUTE_RANGE_TIME) {
+		        actual_usecs > (expected_usecs_end + tolerance_usecs))
+		{
+			if (time_type == ABSOLUTE_RANGE_TIME)
+			{
+#ifdef ECOS
+				int len = strlen("timing error: expected ") + strlen(description) + strlen(" in time range ~ sec ") + 32 + strlen("but happened at  sec");
+				*error = malloc(len);
+				snprintf(*error, len, "timing error: expected "
+				         "%s in time range %.6f~%.6f sec "
+				         "but happened at %.6f sec",
+				         description,
+				         usecs_to_secs(script_usecs),
+				         usecs_to_secs(script_usecs_end),
+				         usecs_to_secs(actual_usecs));
+#else
 				asprintf(error,
-					 "timing error: expected "
-					 "%s in time range %.6f~%.6f sec "
-					 "but happened at %.6f sec",
-					 description,
-					 usecs_to_secs(script_usecs),
-					 usecs_to_secs(script_usecs_end),
-					 usecs_to_secs(actual_usecs));
-			} else if (time_type == RELATIVE_RANGE_TIME) {
+				         "timing error: expected "
+				         "%s in time range %.6f~%.6f sec "
+				         "but happened at %.6f sec",
+				         description,
+				         usecs_to_secs(script_usecs),
+				         usecs_to_secs(script_usecs_end),
+				         usecs_to_secs(actual_usecs));
+#endif
+			}
+			else if (time_type == RELATIVE_RANGE_TIME)
+			{
 				s64 offset_usecs = state->event->offset_usecs;
+#ifdef ECOS
+				int len = strlen("timing error: expected ") + strlen(description) + strlen(" in relative time range +~+ ") + 32 + strlen("sec but happened at  sec");
+				*error = malloc(len);
+				snprintf(*error, len, "timing error: expected "
+				         "%s in relative time range +%.6f~+%.6f "
+				         "sec but happened at %+.6f sec",
+				         description,
+				         usecs_to_secs(script_usecs -
+				                       offset_usecs),
+				         usecs_to_secs(script_usecs_end -
+				                       offset_usecs),
+				         usecs_to_secs(actual_usecs -
+				                       offset_usecs));
+#else
 				asprintf(error,
-					 "timing error: expected "
-					 "%s in relative time range +%.6f~+%.6f "
-					 "sec but happened at %+.6f sec",
-					 description,
-					 usecs_to_secs(script_usecs -
-						       offset_usecs),
-					 usecs_to_secs(script_usecs_end -
-						       offset_usecs),
-					 usecs_to_secs(actual_usecs -
-						       offset_usecs));
+				         "timing error: expected "
+				         "%s in relative time range +%.6f~+%.6f "
+				         "sec but happened at %+.6f sec",
+				         description,
+				         usecs_to_secs(script_usecs -
+				                       offset_usecs),
+				         usecs_to_secs(script_usecs_end -
+				                       offset_usecs),
+				         usecs_to_secs(actual_usecs -
+				                       offset_usecs));
+#endif
 			}
 			return STATUS_ERR;
-		} else {
+		}
+		else
+		{
 			return STATUS_OK;
 		}
 	}
 
 	if ((actual_usecs < (expected_usecs - tolerance_usecs)) ||
-	    (actual_usecs > (expected_usecs + tolerance_usecs))) {
+	        (actual_usecs > (expected_usecs + tolerance_usecs)))
+	{
+#ifdef ECOS
+		int len = strlen("timing error: expected ") + strlen(description) + strlen(" at  sec but happened at  sec") + 24;
+		*error = malloc(len);
+		snprintf(*error, len, 		         "timing error: "
+		         "expected %s at %.6f sec but happened at %.6f sec",
+		         description,
+		         usecs_to_secs(script_usecs),
+		         usecs_to_secs(actual_usecs));
+#else
 		asprintf(error,
-			 "timing error: "
-			 "expected %s at %.6f sec but happened at %.6f sec",
-			 description,
-			 usecs_to_secs(script_usecs),
-			 usecs_to_secs(actual_usecs));
+		         "timing error: "
+		         "expected %s at %.6f sec but happened at %.6f sec",
+		         description,
+		         usecs_to_secs(script_usecs),
+		         usecs_to_secs(actual_usecs));
+#endif
 		return STATUS_ERR;
-	} else {
+	}
+	else
+	{
 		return STATUS_OK;
 	}
 }
@@ -226,10 +278,12 @@ static const char *event_description(struct event *event)
 	enum direction_t direction = DIRECTION_INVALID;
 
 	if ((event->type <= INVALID_EVENT) ||
-	    (event->type >= NUM_EVENT_TYPES)) {
+	        (event->type >= NUM_EVENT_TYPES))
+	{
 		die("bogus event type: %d", event->type);
 	}
-	switch (event->type) {
+	switch (event->type)
+	{
 	case PACKET_EVENT:
 		direction = packet_direction(event->event.packet);
 		if (direction == DIRECTION_INBOUND)
@@ -249,7 +303,7 @@ static const char *event_description(struct event *event)
 	case NUM_EVENT_TYPES:
 		assert(!"bogus type");
 		break;
-	/* We omit default case so compiler catches missing values. */
+		/* We omit default case so compiler catches missing values. */
 	}
 	return "invalid event";
 }
@@ -259,10 +313,11 @@ void check_event_time(struct state *state, s64 live_usecs)
 	char *error = NULL;
 	const char *description = event_description(state->event);
 	if (verify_time(state,
-			state->event->time_type,
-			state->event->time_usecs,
-			state->event->time_usecs_end, live_usecs,
-			description, &error)) {
+	                state->event->time_type,
+	                state->event->time_usecs,
+	                state->event->time_usecs_end, live_usecs,
+	                description, &error))
+	{
 		die("%s:%d: %s\n",
 		    state->config->script_path,
 		    state->event->line_number,
@@ -278,8 +333,8 @@ void adjust_relative_event_times(struct state *state, struct event *event)
 	s64 offset_usecs;
 
 	if (event->time_type != ANY_TIME &&
-	    event->time_type != RELATIVE_TIME &&
-	    event->time_type != RELATIVE_RANGE_TIME)
+	        event->time_type != RELATIVE_TIME &&
+	        event->time_type != RELATIVE_RANGE_TIME)
 		return;
 
 	offset_usecs = now_usecs() - state->live_start_time_usecs;
@@ -291,8 +346,9 @@ void adjust_relative_event_times(struct state *state, struct event *event)
 
 	/* Adjust the end time of blocking system calls using relative times. */
 	if (event->time_type == RELATIVE_TIME &&
-	    event->type == SYSCALL_EVENT &&
-	    is_blocking_syscall(event->event.syscall)) {
+	        event->type == SYSCALL_EVENT &&
+	        is_blocking_syscall(event->event.syscall))
+	{
 		event->event.syscall->end_usecs += offset_usecs;
 	}
 }
@@ -300,11 +356,12 @@ void adjust_relative_event_times(struct state *state, struct event *event)
 void wait_for_event(struct state *state)
 {
 	s64 event_usecs =
-		script_time_to_live_time_usecs(
-			state, state->event->time_usecs);
+	    script_time_to_live_time_usecs(
+	        state, state->event->time_usecs);
 	DEBUGP("waiting until %lld -- now is %lld\n",
 	       event_usecs, now_usecs());
-	while (1) {
+	while (1)
+	{
 		const s64 wait_usecs = event_usecs - now_usecs();
 		if (wait_usecs <= 0)
 			break;
@@ -318,7 +375,8 @@ void wait_for_event(struct state *state)
 		 * when we tell it to, sleep until just before the
 		 * event we're waiting for and then spin.
 		 */
-		if (wait_usecs > MAX_SPIN_USECS) {
+		if (wait_usecs > MAX_SPIN_USECS)
+		{
 			run_unlock(state);
 			usleep(wait_usecs - MAX_SPIN_USECS);
 			run_lock(state);
@@ -335,20 +393,32 @@ void wait_for_event(struct state *state)
 
 int get_next_event(struct state *state, char **error)
 {
-	DEBUGP("gettimeofday: %.6f\n", now_usecs()/1000000.0);
+	DEBUGP("gettimeofday: %.6f\n", now_usecs() / 1000000.0);
 
-	if (state->event == NULL) {
+	if (state->event == NULL)
+	{
 		/* First event. */
 		state->event = state->script->event_list;
 		state->script_start_time_usecs = state->event->time_usecs;
-		if (state->event->time_usecs != 0) {
+		if (state->event->time_usecs != 0)
+		{
+#ifdef ECOS
+			int len = strlen(state->config->script_path) + strlen(":: first event should be at time 0\n") + 8;
+			*error = malloc(len);
+			snprintf(*error, len,  "%s:%d: first event should be at time 0\n",
+			         state->config->script_path,
+			         state->event->line_number);
+#else
 			asprintf(error,
-				 "%s:%d: first event should be at time 0\n",
-				 state->config->script_path,
-				 state->event->line_number);
+			         "%s:%d: first event should be at time 0\n",
+			         state->config->script_path,
+			         state->event->line_number);
+#endif
 			return STATUS_ERR;
 		}
-	} else {
+	}
+	else
+	{
 		/* Move to the next event. */
 		state->script_last_time_usecs = state->event->time_usecs;
 		state->last_event = state->event;
@@ -362,16 +432,28 @@ int get_next_event(struct state *state, char **error)
 	       (state->event->type < NUM_EVENT_TYPES));
 
 	if (state->last_event &&
-	    is_event_time_absolute(state->last_event) &&
-	    is_event_time_absolute(state->event) &&
-	    state->event->time_usecs < state->script_last_time_usecs) {
+	        is_event_time_absolute(state->last_event) &&
+	        is_event_time_absolute(state->event) &&
+	        state->event->time_usecs < state->script_last_time_usecs)
+	{
+#ifdef ECOS
+		int len = strlen(state->config->script_path) + strlen(":: time goes backward in script from  usec to  usec\n") + 32;
+		*error = malloc(len);
+		snprintf(*error, len, "%s:%d: time goes backward in script "
+		         "from %lld usec to %lld usec\n",
+		         state->config->script_path,
+		         state->event->line_number,
+		         state->script_last_time_usecs,
+		         state->event->time_usecs);
+#else
 		asprintf(error,
-			 "%s:%d: time goes backward in script "
-			 "from %lld usec to %lld usec\n",
-			 state->config->script_path,
-			 state->event->line_number,
-			 state->script_last_time_usecs,
-			 state->event->time_usecs);
+		         "%s:%d: time goes backward in script "
+		         "from %lld usec to %lld usec\n",
+		         state->config->script_path,
+		         state->event->line_number,
+		         state->script_last_time_usecs,
+		         state->event->time_usecs);
+#endif
 		return STATUS_ERR;
 	}
 	return STATUS_OK;
@@ -379,16 +461,19 @@ int get_next_event(struct state *state, char **error)
 
 /* Run the given packet event; print warnings/errors, and exit on error. */
 static void run_local_packet_event(struct state *state, struct event *event,
-				   struct packet *packet)
+                                   struct packet *packet)
 {
 	char *error = NULL;
 	int result = STATUS_OK;
 
 	result = run_packet_event(state, event, packet, &error);
-	if (result == STATUS_WARN) {
+	if (result == STATUS_WARN)
+	{
 		fprintf(stderr, "%s", error);
 		free(error);
-	} else if (result == STATUS_ERR) {
+	}
+	else if (result == STATUS_ERR)
+	{
 		die("%s", error);
 	}
 }
@@ -401,11 +486,15 @@ static void run_local_packet_event(struct state *state, struct event *event,
 void set_scheduling_priority(void)
 {
 	/* Get the CPU count and skip this if we only have 1 CPU. */
+#ifndef ECOS
 	int num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
 	if (num_cpus < 0)
 		die_perror("sysconf(_SC_NPROCESSORS_ONLN)");
 	if (num_cpus <= 1)
 		return;
+#else
+	return;
+#endif
 
 #if !defined(__OpenBSD__)
 	/* Chose a real-time policy, but use SCHED_RR instead of
@@ -434,8 +523,10 @@ void set_scheduling_priority(void)
  */
 void lock_memory(void)
 {
+#ifndef ECOS
 	if (mlockall(MCL_CURRENT | MCL_FUTURE))
 		die_perror("lockall(MCL_CURRENT | MCL_FUTURE)");
+#endif
 }
 
 /* Wait for and return the wall time at which we should start the
@@ -464,9 +555,11 @@ static s64 schedule_start_time_usecs(void)
 	clock_t last_jiffies = times(NULL);
 	int jiffy_ticks = 0;
 	const int TARGET_JIFFY_TICKS = 10;
-	while (jiffy_ticks < TARGET_JIFFY_TICKS) {
+	while (jiffy_ticks < TARGET_JIFFY_TICKS)
+	{
 		clock_t jiffies = times(NULL);
-		if (jiffies != last_jiffies) {
+		if (jiffies != last_jiffies)
+		{
 			start_usecs = now_usecs();
 			++jiffy_ticks;
 		}
@@ -505,14 +598,17 @@ void run_script(struct config *config, struct script *script)
 
 	state = state_new(config, script, netdev);
 
-	if (config->is_wire_client) {
+	if (config->is_wire_client)
+	{
 		state->wire_client = wire_client_new();
 		wire_client_init(state->wire_client, config, script, state);
 	}
 
-	if (script->init_command != NULL) {
+	if (script->init_command != NULL)
+	{
 		if (safe_system(script->init_command->command_line,
-				&error)) {
+		                &error))
+		{
 			die("%s: error executing init command: %s\n",
 			    config->script_path, error);
 		}
@@ -527,7 +623,8 @@ void run_script(struct config *config, struct script *script)
 	if (state->wire_client != NULL)
 		wire_client_send_client_starting(state->wire_client);
 
-	while (1) {
+	while (1)
+	{
 		if (get_next_event(state, &error))
 			die("%s", error);
 		event = state->event;
@@ -543,31 +640,33 @@ void run_script(struct config *config, struct script *script)
 		 */
 		adjust_relative_event_times(state, event);
 
-		switch (event->type) {
+		switch (event->type)
+		{
 		case PACKET_EVENT:
 			/* For wire clients, the server handles packets. */
-			if (!config->is_wire_client) {
+			if (!config->is_wire_client)
+			{
 				run_local_packet_event(state, event,
-						       event->event.packet);
+				                       event->event.packet);
 			}
 			break;
 		case SYSCALL_EVENT:
 			run_system_call_event(state, event,
-					      event->event.syscall);
+			                      event->event.syscall);
 			break;
 		case COMMAND_EVENT:
 			run_command_event(state, event,
-					  event->event.command);
+			                  event->event.command);
 			break;
 		case CODE_EVENT:
 			run_code_event(state, event,
-				       event->event.code->text);
+			               event->event.code->text);
 			break;
 		case INVALID_EVENT:
 		case NUM_EVENT_TYPES:
 			assert(!"bogus type");
 			break;
-		/* We omit default case so compiler catches missing values. */
+			/* We omit default case so compiler catches missing values. */
 		}
 	}
 
@@ -575,7 +674,8 @@ void run_script(struct config *config, struct script *script)
 	if (state->wire_client != NULL)
 		wire_client_next_event(state->wire_client, NULL);
 
-	if (code_execute(state->code, &error)) {
+	if (code_execute(state->code, &error))
+	{
 		die("%s: error executing code: %s\n",
 		    state->config->script_path, error);
 		free(error);
@@ -587,12 +687,13 @@ void run_script(struct config *config, struct script *script)
 }
 
 int parse_script_and_set_config(int argc, char *argv[],
-				struct config *config,
-				struct script *script,
-				const char *script_path,
-				const char *script_buffer)
+                                struct config *config,
+                                struct script *script,
+                                const char *script_path,
+                                const char *script_buffer)
 {
-	struct invocation invocation = {
+	struct invocation invocation =
+	{
 		.argc = argc,
 		.argv = argv,
 		.config = config,
