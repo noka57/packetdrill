@@ -84,12 +84,15 @@ static u16 ephemeral_port(void)
  */
 static u16 next_ephemeral_port(struct state *state)
 {
-	if (state->packets->next_ephemeral_port >= 0) {
+	if (state->packets->next_ephemeral_port >= 0)
+	{
 		int port = state->packets->next_ephemeral_port;
 		assert(port <= 0xffff);
 		state->packets->next_ephemeral_port = -1;
 		return port;
-	} else {
+	}
+	else
+	{
 		return ephemeral_port();
 	}
 }
@@ -100,20 +103,29 @@ static u16 next_ephemeral_port(struct state *state)
  * packet.
  */
 static void add_packet_dump(char **error, const char *type,
-			    struct packet *packet, s64 time_usecs,
-			    enum dump_format_t format)
+                            struct packet *packet, s64 time_usecs,
+                            enum dump_format_t format)
 {
-	if (packet->ip_bytes != 0) {
+	if (packet->ip_bytes != 0)
+	{
 		char *old_error = *error;
 		char *dump = NULL, *dump_error = NULL;
 
 		packet_to_string(packet, format,
-				 &dump, &dump_error);
+		                 &dump, &dump_error);
+#ifdef ECOS
+		int len = 24 + strlen(old_error) + strlen(type) + strlen(dump) + (dump_error ? (1 + strlen(dump_error)) : 0);
+		*error = malloc(len);
+		snprintf(*error, len, "%s\n%s packet: %9.6f %s%s%s",
+		         old_error, type, usecs_to_secs(time_usecs), dump,
+		         dump_error ? "\n" : "",
+		         dump_error ? dump_error : "");
+#else
 		asprintf(error, "%s\n%s packet: %9.6f %s%s%s",
-			 old_error, type, usecs_to_secs(time_usecs), dump,
-			 dump_error ? "\n" : "",
-			 dump_error ? dump_error : "");
-
+		         old_error, type, usecs_to_secs(time_usecs), dump,
+		         dump_error ? "\n" : "",
+		         dump_error ? dump_error : "");
+#endif
 		free(dump);
 		free(dump_error);
 		free(old_error);
@@ -122,13 +134,14 @@ static void add_packet_dump(char **error, const char *type,
 
 /* For verbose runs, print a short packet dump of all live packets. */
 static void verbose_packet_dump(struct state *state, const char *type,
-				struct packet *live_packet, s64 time_usecs)
+                                struct packet *live_packet, s64 time_usecs)
 {
-	if (state->config->verbose) {
+	if (state->config->verbose)
+	{
 		char *dump = NULL, *dump_error = NULL;
 
 		packet_to_string(live_packet, DUMP_SHORT,
-				 &dump, &dump_error);
+		                 &dump, &dump_error);
 
 		printf("%s packet: %9.6f %s%s%s\n",
 		       type, usecs_to_secs(time_usecs), dump,
@@ -142,8 +155,8 @@ static void verbose_packet_dump(struct state *state, const char *type,
 
 /* See if the live packet matches the live 4-tuple of the socket under test. */
 static struct socket *find_socket_for_live_packet(
-	struct state *state, const struct packet *packet,
-	enum direction_t *direction)
+    struct state *state, const struct packet *packet,
+    enum direction_t *direction)
 {
 	struct socket *socket = state->socket_under_test;	/* shortcut */
 	if (socket == NULL)
@@ -154,7 +167,8 @@ static struct socket *find_socket_for_live_packet(
 
 	/* Is packet inbound to the socket under test? */
 	socket_get_inbound(&socket->live, &live_inbound);
-	if (is_equal_tuple(&packet_tuple, &live_inbound)) {
+	if (is_equal_tuple(&packet_tuple, &live_inbound))
+	{
 		*direction = DIRECTION_INBOUND;
 		DEBUGP("inbound live packet, socket in state %d\n",
 		       socket->state);
@@ -162,7 +176,8 @@ static struct socket *find_socket_for_live_packet(
 	}
 	/* Is packet outbound from the socket under test? */
 	socket_get_outbound(&socket->live, &live_outbound);
-	if (is_equal_tuple(&packet_tuple, &live_outbound)) {
+	if (is_equal_tuple(&packet_tuple, &live_outbound))
+	{
 		*direction = DIRECTION_OUTBOUND;
 		DEBUGP("outbound live packet, socket in state %d\n",
 		       socket->state);
@@ -177,8 +192,8 @@ static struct socket *find_socket_for_live_packet(
  * it. Otherwise, return NULL.
  */
 static struct socket *handle_listen_for_script_packet(
-	struct state *state, const struct packet *packet,
-	enum direction_t direction)
+    struct state *state, const struct packet *packet,
+    enum direction_t direction)
 {
 	/* Does this packet match this socket? For now we only support
 	 * testing one socket at a time, so we merely check whether
@@ -193,15 +208,18 @@ static struct socket *handle_listen_for_script_packet(
 	if (!match)
 		return NULL;
 
-	if (config->is_wire_server) {
+	if (config->is_wire_server)
+	{
 		/* On wire servers we don't see the system calls, so
 		 * we won't have any socket_under_test yet.
 		 */
 		match = (socket == NULL);
-	} else {
+	}
+	else
+	{
 		/* In local mode we will certainly know about this socket. */
 		match = ((socket != NULL) &&
-			 (socket->state == SOCKET_PASSIVE_LISTENING));
+		         (socket->state == SOCKET_PASSIVE_LISTENING));
 	}
 	if (!match)
 		return NULL;
@@ -235,7 +253,8 @@ static struct socket *handle_listen_for_script_packet(
 	socket->live.remote_isn		= ntohl(packet->tcp->seq);
 	socket->live.fd			= -1;
 
-	if (DEBUG_LOGGING) {
+	if (DEBUG_LOGGING)
+	{
 		char local_string[ADDR_STR_LEN];
 		char remote_string[ADDR_STR_LEN];
 		DEBUGP("live: local: %s.%d\n",
@@ -255,8 +274,8 @@ static struct socket *handle_listen_for_script_packet(
  * otherwise, return NULL.
  */
 static struct socket *handle_connect_for_script_packet(
-	struct state *state, const struct packet *packet,
-	enum direction_t direction)
+    struct state *state, const struct packet *packet,
+    enum direction_t direction)
 {
 	/* Does this packet match this socket? For now we only support
 	 * testing one socket at a time, so we merely check whether
@@ -268,24 +287,28 @@ static struct socket *handle_connect_for_script_packet(
 	struct socket *socket = state->socket_under_test;	/* shortcut */
 
 	bool match = ((direction == DIRECTION_OUTBOUND) &&
-		      packet->tcp->syn && !packet->tcp->ack);
+	              packet->tcp->syn && !packet->tcp->ack);
 	if (!match)
 		return NULL;
 
-	if (config->is_wire_server) {
+	if (config->is_wire_server)
+	{
 		/* On wire servers we don't see the system calls, so
 		 * we won't have any socket_under_test yet.
 		 */
 		match = (socket == NULL);
-	} else {
+	}
+	else
+	{
 		/* In local mode we will certainly know about this socket. */
 		match = ((socket != NULL) &&
-			 (socket->state == SOCKET_ACTIVE_CONNECTING));
+		         (socket->state == SOCKET_ACTIVE_CONNECTING));
 	}
 	if (!match)
 		return NULL;
 
-	if (socket == NULL) {
+	if (socket == NULL)
+	{
 		/* Wire server. Create a socket for this outbound SYN
 		 * packet. Any further packets in the test script are
 		 * mapped here.
@@ -316,8 +339,8 @@ static struct socket *handle_connect_for_script_packet(
 
 /* Look for a connecting socket that would emit this outgoing live packet. */
 static struct socket *find_connect_for_live_packet(
-	struct state *state, struct packet *packet,
-	enum direction_t *direction)
+    struct state *state, struct packet *packet,
+    enum direction_t *direction)
 {
 	struct tuple tuple;
 	get_packet_tuple(packet, &tuple);
@@ -328,18 +351,18 @@ static struct socket *find_connect_for_live_packet(
 		return NULL;
 
 	bool is_udp_match =
-		(packet->udp &&
-		 (socket->protocol == IPPROTO_UDP) &&
-		 (socket->state == SOCKET_ACTIVE_CONNECTING));
+	    (packet->udp &&
+	     (socket->protocol == IPPROTO_UDP) &&
+	     (socket->state == SOCKET_ACTIVE_CONNECTING));
 	bool is_tcp_match =
-		(packet->tcp && packet->tcp->syn && !packet->tcp->ack &&
-		 (socket->protocol == IPPROTO_TCP) &&
-		 (socket->state == SOCKET_ACTIVE_SYN_SENT));
+	    (packet->tcp && packet->tcp->syn && !packet->tcp->ack &&
+	     (socket->protocol == IPPROTO_TCP) &&
+	     (socket->state == SOCKET_ACTIVE_SYN_SENT));
 	if (!is_udp_match && !is_tcp_match)
 		return NULL;
 
 	if (!is_equal_ip(&tuple.dst.ip, &socket->live.remote.ip) ||
-	    !is_equal_port(tuple.dst.port, socket->live.remote.port))
+	        !is_equal_port(tuple.dst.port, socket->live.remote.port))
 		return NULL;
 
 	*direction = DIRECTION_OUTBOUND;
@@ -358,25 +381,25 @@ static struct socket *find_connect_for_live_packet(
 
 /* Convert outbound TCP timestamp value from scripted value to live value. */
 static int get_outbound_ts_val_mapping(
-	struct socket *socket, u32 script_timestamp, u32 *live_timestamp)
+    struct socket *socket, u32 script_timestamp, u32 *live_timestamp)
 {
 	DEBUGP("get_outbound_ts_val_mapping\n");
 	DEBUGP("ts_val_mapping %u -> ?\n", ntohl(script_timestamp));
 	if (hash_map_get(socket->ts_val_map,
-				 script_timestamp, live_timestamp))
+	                 script_timestamp, live_timestamp))
 		return STATUS_OK;
 	return STATUS_ERR;
 }
 
 /* Store script->live mapping for outbound TCP timestamp value. */
 static void set_outbound_ts_val_mapping(
-	struct socket *socket, u32 script_timestamp, u32 live_timestamp)
+    struct socket *socket, u32 script_timestamp, u32 live_timestamp)
 {
 	DEBUGP("set_outbound_ts_val_mapping\n");
 	DEBUGP("ts_val_mapping %u -> %u\n",
 	       ntohl(script_timestamp), ntohl(live_timestamp));
 	hash_map_set(socket->ts_val_map,
-			     script_timestamp, live_timestamp);
+	             script_timestamp, live_timestamp);
 }
 
 /* A helper to find the TCP timestamp option in a packet. Parse the
@@ -395,8 +418,9 @@ static int find_tcp_timestamp(struct packet *packet, char **error)
 	packet->tcp_ts_val = NULL;
 	packet->tcp_ts_ecr = NULL;
 	for (option = tcp_options_begin(packet, &iter); option != NULL;
-	     option = tcp_options_next(&iter, error))
-		if (option->kind == TCPOPT_TIMESTAMP) {
+	        option = tcp_options_next(&iter, error))
+		if (option->kind == TCPOPT_TIMESTAMP)
+		{
 			packet->tcp_ts_val = &(option->data.time_stamp.val);
 			packet->tcp_ts_ecr = &(option->data.time_stamp.ecr);
 		}
@@ -409,19 +433,22 @@ static int find_tcp_timestamp(struct packet *packet, char **error)
  * failure returns STATUS_ERR and sets error message.
  */
 static int offset_sack_blocks(struct packet *packet,
-			      u32 ack_offset, char **error)
+                              u32 ack_offset, char **error)
 {
 	struct tcp_options_iterator iter;
 	struct tcp_option *option = NULL;
 	for (option = tcp_options_begin(packet, &iter); option != NULL;
-	     option = tcp_options_next(&iter, error)) {
-		if (option->kind == TCPOPT_SACK) {
+	        option = tcp_options_next(&iter, error))
+	{
+		if (option->kind == TCPOPT_SACK)
+		{
 			int num_blocks = 0;
 			if (num_sack_blocks(option->length,
-						    &num_blocks, error))
+			                    &num_blocks, error))
 				return STATUS_ERR;
 			int i = 0;
-			for (i = 0; i < num_blocks; ++i) {
+			for (i = 0; i < num_blocks; ++i)
+			{
 				u32 val;
 				val = ntohl(option->data.sack.block[i].left);
 				val += ack_offset;
@@ -440,7 +467,7 @@ static int offset_sack_blocks(struct packet *packet,
  * The Linux TCP layer ignores ICMP messages with bogus sequence numbers.
  */
 static int map_inbound_icmp_tcp_packet(
-	struct socket *socket, struct packet *live_packet, char **error)
+    struct socket *socket, struct packet *live_packet, char **error)
 {
 	u32 *seq = packet_echoed_tcp_seq(live_packet);
 	bool is_syn = false;
@@ -451,13 +478,13 @@ static int map_inbound_icmp_tcp_packet(
 
 /* UDP headers echoed by ICMP messages need no special rewriting. */
 static int map_inbound_icmp_udp_packet(
-	struct socket *socket, struct packet *live_packet, char **error)
+    struct socket *socket, struct packet *live_packet, char **error)
 {
 	return STATUS_OK;
 }
 
 static int map_inbound_icmp_packet(
-	struct socket *socket, struct packet *live_packet, char **error)
+    struct socket *socket, struct packet *live_packet, char **error)
 {
 	if (packet_echoed_ip_protocol(live_packet) == IPPROTO_TCP)
 		return map_inbound_icmp_tcp_packet(socket, live_packet, error);
@@ -476,7 +503,7 @@ static int map_inbound_icmp_packet(
  * on failure returns STATUS_ERR and sets error message.
  */
 static int map_inbound_packet(
-	struct socket *socket, struct packet *live_packet, char **error)
+    struct socket *socket, struct packet *live_packet, char **error)
 {
 	DEBUGP("map_inbound_packet\n");
 
@@ -502,7 +529,7 @@ static int map_inbound_packet(
 	const u32 ack_offset = local_seq_script_to_live_offset(socket, is_syn);
 	if (live_packet->tcp->ack)
 		live_packet->tcp->ack_seq =
-			htonl(ntohl(live_packet->tcp->ack_seq) + ack_offset);
+		    htonl(ntohl(live_packet->tcp->ack_seq) + ack_offset);
 	if (offset_sack_blocks(live_packet, ack_offset, error))
 		return STATUS_ERR;
 
@@ -516,15 +543,24 @@ static int map_inbound_packet(
 	 * same script value if a live test replay flips to a new
 	 * jiffie in a spot where the script did not.
 	 */
-	if (live_packet->tcp->ack && (live_packet->tcp_ts_ecr != NULL)) {
+	if (live_packet->tcp->ack && (live_packet->tcp_ts_ecr != NULL))
+	{
 		u32 live_ts_ecr = 0;
 
 		if (get_outbound_ts_val_mapping(socket,
-						packet_tcp_ts_ecr(live_packet),
-						&live_ts_ecr)) {
+		                                packet_tcp_ts_ecr(live_packet),
+		                                &live_ts_ecr))
+		{
+#ifdef ECOS
+			int len = strlen("unable to find mapping for timestamp ecr ") + 8;
+			*error = malloc(len);
+			snprintf(*error, len, "unable to find mapping for timestamp ecr %u",
+			         packet_tcp_ts_ecr(live_packet));
+#else
 			asprintf(error,
-				 "unable to find mapping for timestamp ecr %u",
-				 packet_tcp_ts_ecr(live_packet));
+			         "unable to find mapping for timestamp ecr %u",
+			         packet_tcp_ts_ecr(live_packet));
+#endif
 			return STATUS_ERR;
 		}
 		packet_set_tcp_ts_ecr(live_packet, live_ts_ecr);
@@ -540,11 +576,11 @@ static int map_inbound_packet(
  * packet sent by the kernel to the packet expected by the script.
  */
 static int map_outbound_live_packet(
-	struct socket *socket,
-	struct packet *live_packet,
-	struct packet *actual_packet,
-	struct packet *script_packet,
-	char **error)
+    struct socket *socket,
+    struct packet *live_packet,
+    struct packet *actual_packet,
+    struct packet *script_packet,
+    char **error)
 {
 	DEBUGP("map_outbound_live_packet\n");
 
@@ -583,17 +619,19 @@ static int map_outbound_live_packet(
 	if (find_tcp_timestamp(actual_packet, error))
 		return STATUS_ERR;
 	if ((script_packet->tcp_ts_val != NULL) &&
-	    (actual_packet->tcp_ts_val != NULL)) {
+	        (actual_packet->tcp_ts_val != NULL))
+	{
 		u32 script_ts_val = packet_tcp_ts_val(script_packet);
 		u32 actual_ts_val = packet_tcp_ts_val(actual_packet);
 
 		/* Remember script->actual TS val mapping for later. */
 		set_outbound_ts_val_mapping(socket,
-					    script_ts_val,
-					    actual_ts_val);
+		                            script_ts_val,
+		                            actual_ts_val);
 
 		/* Find baseline for socket's live->script TS val mapping. */
-		if (!socket->found_first_tcp_ts) {
+		if (!socket->found_first_tcp_ts)
+		{
 			socket->found_first_tcp_ts = true;
 			socket->first_script_ts_val = script_ts_val;
 			socket->first_actual_ts_val = actual_ts_val;
@@ -604,9 +642,9 @@ static int map_outbound_live_packet(
 		 * timestamp val.
 		 */
 		packet_set_tcp_ts_val(actual_packet,
-				      socket->first_script_ts_val +
-				      (actual_ts_val -
-				       socket->first_actual_ts_val));
+		                      socket->first_script_ts_val +
+		                      (actual_ts_val -
+		                       socket->first_actual_ts_val));
 	}
 
 	return STATUS_OK;
@@ -614,13 +652,20 @@ static int map_outbound_live_packet(
 
 /* Verify IP and TCP checksums on an outbound live packet. */
 static int verify_outbound_live_checksums(struct packet *live_packet,
-					  char **error)
+                                          char **error)
 {
 	/* Verify IP header checksum. */
 	if ((live_packet->ipv4 != NULL) &&
-	    ipv4_checksum(live_packet->ipv4,
-			  ipv4_header_len(live_packet->ipv4))) {
+	        ipv4_checksum(live_packet->ipv4,
+	                      ipv4_header_len(live_packet->ipv4)))
+	{
+#ifdef ECOS
+		int len = strlen("bad outbound IP checksum");
+		*error = malloc(len);
+		snprintf(*error, len, "bad outbound IP checksum");
+#else
 		asprintf(error, "bad outbound IP checksum");
+#endif
 		return STATUS_ERR;
 	}
 
@@ -635,15 +680,24 @@ static int verify_outbound_live_checksums(struct packet *live_packet,
  * value, and emit a human-readable error message if not.
  */
 static int check_field(
-	const char *name,	/* human-readable name of the header field */
-	u32 expected,		/* value script hopes to see */
-	u32 actual,		/* actual value seen during test */
-	char **error)		/* human-readable error string on failure */
+    const char *name,	/* human-readable name of the header field */
+    u32 expected,		/* value script hopes to see */
+    u32 actual,		/* actual value seen during test */
+    char **error)		/* human-readable error string on failure */
 {
-	if (actual != expected) {
+	if (actual != expected)
+	{
+#ifdef ECOS
+		int len = strlen("live packet field : expected:  (0x) vs actual:  (0x)") + strlen(name) + 32;
+		*error = malloc(len);
+		snprintf(*error, len, "live packet field %s: "
+		         "expected: %u (0x%x) vs actual: %u (0x%x)",
+		         name, expected, expected, actual, actual);
+#else
 		asprintf(error, "live packet field %s: "
-			 "expected: %u (0x%x) vs actual: %u (0x%x)",
-			 name, expected, expected, actual, actual);
+		         "expected: %u (0x%x) vs actual: %u (0x%x)",
+		         name, expected, expected, actual, actual);
+#endif
 		return STATUS_ERR;
 	}
 	return STATUS_OK;
@@ -651,24 +705,37 @@ static int check_field(
 
 /* Verify that the actual ECN bits are as the script expected. */
 static int verify_outbound_live_ecn(enum ip_ecn_t ecn,
-				    u8 actual_ecn_bits,
-				    u8 script_ecn_bits,
-				    char **error)
+                                    u8 actual_ecn_bits,
+                                    u8 script_ecn_bits,
+                                    char **error)
 {
 	if (ecn == ECN_NOCHECK)
 		return STATUS_OK;
 
-	if (ecn == ECN_ECT01) {
+	if (ecn == ECN_ECT01)
+	{
 		if ((actual_ecn_bits != IP_ECN_ECT0) &&
-		    (actual_ecn_bits != IP_ECN_ECT1)) {
+		        (actual_ecn_bits != IP_ECN_ECT1))
+		{
+#ifdef ECOS
+			int len = strlen("live packet field ip_ecn: expected: 0x1 or 0x2 vs actual: 0x") + 8;
+			*error = malloc(len);
+			snprintf(*error, len, "live packet field ip_ecn: "
+			         "expected: 0x1 or 0x2 vs actual: 0x%x",
+			         actual_ecn_bits);
+
+#else
 			asprintf(error, "live packet field ip_ecn: "
-				 "expected: 0x1 or 0x2 vs actual: 0x%x",
-				 actual_ecn_bits);
+			         "expected: 0x1 or 0x2 vs actual: 0x%x",
+			         actual_ecn_bits);
+#endif
 			return STATUS_ERR;
 		}
-	} else if (check_field("ip_ecn",
-			       script_ecn_bits,
-			       actual_ecn_bits, error)) {
+	}
+	else if (check_field("ip_ecn",
+	                     script_ecn_bits,
+	                     actual_ecn_bits, error))
+	{
 		return STATUS_ERR;
 	}
 
@@ -679,7 +746,7 @@ static int verify_outbound_live_ecn(enum ip_ecn_t ecn,
  * the actual TCP options we did see?
  */
 static int tcp_options_allowance(const struct packet *actual_packet,
-				 const struct packet *script_packet)
+                                 const struct packet *script_packet)
 {
 	if (script_packet->flags & FLAG_OPTIONS_NOCHECK)
 		return packet_tcp_options_len(actual_packet);
@@ -689,33 +756,33 @@ static int tcp_options_allowance(const struct packet *actual_packet,
 
 /* Verify that required actual IPv4 header fields are as the script expected. */
 static int verify_ipv4(
-	const struct packet *actual_packet,
-	const struct packet *script_packet,
-	int layer, char **error)
+    const struct packet *actual_packet,
+    const struct packet *script_packet,
+    int layer, char **error)
 {
 	const struct ipv4 *actual_ipv4 = actual_packet->headers[layer].h.ipv4;
 	const struct ipv4 *script_ipv4 = script_packet->headers[layer].h.ipv4;
 
 	if (check_field("ipv4_version",
-			script_ipv4->version,
-			actual_ipv4->version, error) ||
-	    check_field("ipv4_protocol",
-			script_ipv4->protocol,
-			actual_ipv4->protocol, error) ||
-	    check_field("ipv4_header_length",
-			script_ipv4->ihl,
-			actual_ipv4->ihl, error) ||
-	    check_field("ipv4_total_length",
-			(ntohs(script_ipv4->tot_len) +
-			 tcp_options_allowance(actual_packet,
-					       script_packet)),
-			ntohs(actual_ipv4->tot_len), error))
+	                script_ipv4->version,
+	                actual_ipv4->version, error) ||
+	        check_field("ipv4_protocol",
+	                    script_ipv4->protocol,
+	                    actual_ipv4->protocol, error) ||
+	        check_field("ipv4_header_length",
+	                    script_ipv4->ihl,
+	                    actual_ipv4->ihl, error) ||
+	        check_field("ipv4_total_length",
+	                    (ntohs(script_ipv4->tot_len) +
+	                     tcp_options_allowance(actual_packet,
+	                                           script_packet)),
+	                    ntohs(actual_ipv4->tot_len), error))
 		return STATUS_ERR;
 
 	if (verify_outbound_live_ecn(script_packet->ecn,
-				     ipv4_ecn_bits(actual_ipv4),
-				     ipv4_ecn_bits(script_ipv4),
-				     error))
+	                             ipv4_ecn_bits(actual_ipv4),
+	                             ipv4_ecn_bits(script_ipv4),
+	                             error))
 		return STATUS_ERR;
 
 	return STATUS_OK;
@@ -723,30 +790,30 @@ static int verify_ipv4(
 
 /* Verify that required actual IPv6 header fields are as the script expected. */
 static int verify_ipv6(
-	const struct packet *actual_packet,
-	const struct packet *script_packet,
-	int layer, char **error)
+    const struct packet *actual_packet,
+    const struct packet *script_packet,
+    int layer, char **error)
 {
 	const struct ipv6 *actual_ipv6 = actual_packet->headers[layer].h.ipv6;
 	const struct ipv6 *script_ipv6 = script_packet->headers[layer].h.ipv6;
 
 	if (check_field("ipv6_version",
-			script_ipv6->version,
-			actual_ipv6->version, error) ||
-	    check_field("ipv6_payload_len",
-			(ntohs(script_ipv6->payload_len) +
-			 tcp_options_allowance(actual_packet,
-					       script_packet)),
-			ntohs(actual_ipv6->payload_len), error) ||
-	    check_field("ipv6_next_header",
-			script_ipv6->next_header,
-			actual_ipv6->next_header, error))
+	                script_ipv6->version,
+	                actual_ipv6->version, error) ||
+	        check_field("ipv6_payload_len",
+	                    (ntohs(script_ipv6->payload_len) +
+	                     tcp_options_allowance(actual_packet,
+	                                           script_packet)),
+	                    ntohs(actual_ipv6->payload_len), error) ||
+	        check_field("ipv6_next_header",
+	                    script_ipv6->next_header,
+	                    actual_ipv6->next_header, error))
 		return STATUS_ERR;
 
 	if (verify_outbound_live_ecn(script_packet->ecn,
-				     ipv6_ecn_bits(actual_ipv6),
-				     ipv6_ecn_bits(script_ipv6),
-				     error))
+	                             ipv6_ecn_bits(actual_ipv6),
+	                             ipv6_ecn_bits(script_ipv6),
+	                             error))
 		return STATUS_ERR;
 
 	return STATUS_OK;
@@ -754,58 +821,58 @@ static int verify_ipv6(
 
 /* Verify that required actual TCP header fields are as the script expected. */
 static int verify_tcp(
-	const struct packet *actual_packet,
-	const struct packet *script_packet,
-	int layer, char **error)
+    const struct packet *actual_packet,
+    const struct packet *script_packet,
+    int layer, char **error)
 {
 	const struct tcp *actual_tcp = actual_packet->headers[layer].h.tcp;
 	const struct tcp *script_tcp = script_packet->headers[layer].h.tcp;
 
 	if (check_field("tcp_data_offset",
-			(script_tcp->doff +
-			 tcp_options_allowance(actual_packet,
-					       script_packet)/sizeof(u32)),
-			actual_tcp->doff, error) ||
-	    check_field("tcp_fin",
-			script_tcp->fin,
-			actual_tcp->fin, error) ||
-	    check_field("tcp_syn",
-			script_tcp->syn,
-			actual_tcp->syn, error) ||
-	    check_field("tcp_rst",
-			script_tcp->rst,
-			actual_tcp->rst, error) ||
-	    check_field("tcp_psh",
-			script_tcp->psh,
-			actual_tcp->psh, error) ||
-	    check_field("tcp_ack",
-			script_tcp->ack,
-			actual_tcp->ack, error) ||
-	    check_field("tcp_urg",
-			script_tcp->urg,
-			actual_tcp->urg, error) ||
-	    check_field("tcp_ece",
-			script_tcp->ece,
-			actual_tcp->ece, error) ||
-	    check_field("tcp_cwr",
-			script_tcp->cwr,
-			actual_tcp->cwr, error) ||
-	    check_field("tcp_reserved_bits",
-			script_tcp->res1,
-			actual_tcp->res1, error) ||
-	    check_field("tcp_seq",
-			ntohl(script_tcp->seq),
-			ntohl(actual_tcp->seq), error) ||
-	    check_field("tcp_ack_seq",
-			ntohl(script_tcp->ack_seq),
-			ntohl(actual_tcp->ack_seq), error) ||
-	    (script_packet->flags & FLAG_WIN_NOCHECK ? STATUS_OK :
-		check_field("tcp_window",
-			    ntohs(script_tcp->window),
-			    ntohs(actual_tcp->window), error))  ||
-	    check_field("tcp_urg_ptr",
-			ntohs(script_tcp->urg_ptr),
-			ntohs(actual_tcp->urg_ptr), error))
+	                (script_tcp->doff +
+	                 tcp_options_allowance(actual_packet,
+	                                       script_packet) / sizeof(u32)),
+	                actual_tcp->doff, error) ||
+	        check_field("tcp_fin",
+	                    script_tcp->fin,
+	                    actual_tcp->fin, error) ||
+	        check_field("tcp_syn",
+	                    script_tcp->syn,
+	                    actual_tcp->syn, error) ||
+	        check_field("tcp_rst",
+	                    script_tcp->rst,
+	                    actual_tcp->rst, error) ||
+	        check_field("tcp_psh",
+	                    script_tcp->psh,
+	                    actual_tcp->psh, error) ||
+	        check_field("tcp_ack",
+	                    script_tcp->ack,
+	                    actual_tcp->ack, error) ||
+	        check_field("tcp_urg",
+	                    script_tcp->urg,
+	                    actual_tcp->urg, error) ||
+	        check_field("tcp_ece",
+	                    script_tcp->ece,
+	                    actual_tcp->ece, error) ||
+	        check_field("tcp_cwr",
+	                    script_tcp->cwr,
+	                    actual_tcp->cwr, error) ||
+	        check_field("tcp_reserved_bits",
+	                    script_tcp->res1,
+	                    actual_tcp->res1, error) ||
+	        check_field("tcp_seq",
+	                    ntohl(script_tcp->seq),
+	                    ntohl(actual_tcp->seq), error) ||
+	        check_field("tcp_ack_seq",
+	                    ntohl(script_tcp->ack_seq),
+	                    ntohl(actual_tcp->ack_seq), error) ||
+	        (script_packet->flags & FLAG_WIN_NOCHECK ? STATUS_OK :
+	         check_field("tcp_window",
+	                     ntohs(script_tcp->window),
+	                     ntohs(actual_tcp->window), error))  ||
+	        check_field("tcp_urg_ptr",
+	                    ntohs(script_tcp->urg_ptr),
+	                    ntohs(actual_tcp->urg_ptr), error))
 		return STATUS_ERR;
 
 	return STATUS_OK;
@@ -813,42 +880,42 @@ static int verify_tcp(
 
 /* Verify that required actual UDP header fields are as the script expected. */
 static int verify_udp(
-	const struct packet *actual_packet,
-	const struct packet *script_packet,
-	int layer, char **error)
+    const struct packet *actual_packet,
+    const struct packet *script_packet,
+    int layer, char **error)
 {
 	const struct udp *actual_udp = actual_packet->headers[layer].h.udp;
 	const struct udp *script_udp = script_packet->headers[layer].h.udp;
 
 	if (check_field("udp_len",
-			script_udp->len,
-			actual_udp->len, error))
+	                script_udp->len,
+	                actual_udp->len, error))
 		return STATUS_ERR;
 	return STATUS_OK;
 }
 
 /* Verify that required actual GRE header fields are as the script expected. */
 static int verify_gre(
-	const struct packet *actual_packet,
-	const struct packet *script_packet,
-	int layer, char **error)
+    const struct packet *actual_packet,
+    const struct packet *script_packet,
+    int layer, char **error)
 {
 	const struct gre *actual_gre = actual_packet->headers[layer].h.gre;
 	const struct gre *script_gre = script_packet->headers[layer].h.gre;
 
 	/* TODO(ncardwell) check all fields of GRE header */
 	if (check_field("gre_len",
-			gre_len(script_gre),
-			gre_len(actual_gre), error))
+	                gre_len(script_gre),
+	                gre_len(actual_gre), error))
 		return STATUS_ERR;
 	return STATUS_OK;
 }
 
 /* Verify that required actual MPLS header fields are as the script expected. */
 static int verify_mpls(
-	const struct packet *actual_packet,
-	const struct packet *script_packet,
-	int layer, char **error)
+    const struct packet *actual_packet,
+    const struct packet *script_packet,
+    int layer, char **error)
 {
 	const struct header *actual_header = &actual_packet->headers[layer];
 	const struct header *script_header = &script_packet->headers[layer];
@@ -857,16 +924,31 @@ static int verify_mpls(
 	int num_entries = script_header->header_bytes / sizeof(struct mpls);
 	int i = 0;
 
-	if (script_header->header_bytes != actual_header->header_bytes) {
+	if (script_header->header_bytes != actual_header->header_bytes)
+	{
+#ifdef ECOS
+		int len = strlen("mismatch in MPLS label stack depth");
+		*error = malloc(len);
+		snprintf(*error, len, "mismatch in MPLS label stack depth");
+#else
 		asprintf(error, "mismatch in MPLS label stack depth");
+#endif
 		return STATUS_ERR;
 	}
 
-	for (i = 0; i < num_entries; ++i) {
+	for (i = 0; i < num_entries; ++i)
+	{
 		const struct mpls *actual_entry = actual_mpls + i;
 		const struct mpls *script_entry = script_mpls + i;
-		if (memcmp(actual_entry, script_entry, sizeof(*script_entry))) {
+		if (memcmp(actual_entry, script_entry, sizeof(*script_entry)))
+		{
+#ifdef ECOS
+			int len = strlen("mismatch in MPLS label ") + 8;
+			*error = malloc(len);
+			snprintf(*error, len, "mismatch in MPLS label %d", i);
+#else
 			asprintf(error, "mismatch in MPLS label %d", i);
+#endif
 			return STATUS_ERR;
 		}
 	}
@@ -875,17 +957,18 @@ static int verify_mpls(
 }
 
 typedef int (*verifier_func)(
-	const struct packet *actual_packet,
-	const struct packet *script_packet,
-	int layer, char **error);
+    const struct packet *actual_packet,
+    const struct packet *script_packet,
+    int layer, char **error);
 
 /* Verify that required actual header fields are as the script expected. */
 static int verify_header(
-	const struct packet *actual_packet,
-	const struct packet *script_packet,
-	int layer, char **error)
+    const struct packet *actual_packet,
+    const struct packet *script_packet,
+    int layer, char **error)
 {
-	verifier_func verifiers[HEADER_NUM_TYPES] = {
+	verifier_func verifiers[HEADER_NUM_TYPES] =
+	{
 		[HEADER_IPV4]	= verify_ipv4,
 		[HEADER_IPV6]	= verify_ipv6,
 		[HEADER_GRE]	= verify_gre,
@@ -898,12 +981,23 @@ static int verify_header(
 	const struct header *script_header = &script_packet->headers[layer];
 	enum header_t type = script_header->type;
 
-	if (script_header->type != actual_header->type) {
+	if (script_header->type != actual_header->type)
+	{
+#ifdef ECOS
+		int len = strlen(header_type_info(script_header->type)->name) + strlen(header_type_info(actual_header->type)->name) + strlen("live packet header layer : expected:  header vs actual:  header") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "live packet header layer %d: "
+		         "expected: %s header vs actual: %s header",
+		         layer,
+		         header_type_info(script_header->type)->name,
+		         header_type_info(actual_header->type)->name);
+#else
 		asprintf(error, "live packet header layer %d: "
-			 "expected: %s header vs actual: %s header",
-			 layer,
-			 header_type_info(script_header->type)->name,
-			 header_type_info(actual_header->type)->name);
+		         "expected: %s header vs actual: %s header",
+		         layer,
+		         header_type_info(script_header->type)->name,
+		         header_type_info(actual_header->type)->name);
+#endif
 		return STATUS_ERR;
 	}
 
@@ -916,8 +1010,8 @@ static int verify_header(
 
 /* Verify that required actual header fields are as the script expected. */
 static int verify_outbound_live_headers(
-	const struct packet *actual_packet,
-	const struct packet *script_packet, char **error)
+    const struct packet *actual_packet,
+    const struct packet *script_packet, char **error)
 {
 	const int actual_headers = packet_header_count(actual_packet);
 	const int script_headers = packet_header_count(script_packet);
@@ -926,15 +1020,25 @@ static int verify_outbound_live_headers(
 	assert((actual_packet->ipv4 != NULL) || (actual_packet->ipv6 != NULL));
 	assert((actual_packet->tcp != NULL) || (actual_packet->udp != NULL));
 
-	if (actual_headers != script_headers) {
+	if (actual_headers != script_headers)
+	{
+#ifdef ECOS
+		int len = 16 + strlen("live packet header layers: expected:  headers vs actual:  headers");
+		*error = malloc(len);
+		snprintf(*error, len, "live packet header layers: "
+		         "expected: %d headers vs actual: %d headers",
+		         script_headers, actual_headers);
+#else
 		asprintf(error, "live packet header layers: "
-			 "expected: %d headers vs actual: %d headers",
-			 script_headers, actual_headers);
+		         "expected: %d headers vs actual: %d headers",
+		         script_headers, actual_headers);
+#endif
 		return STATUS_ERR;
 	}
 
 	/* Compare actual vs script headers, layer by layer. */
-	for (i = 0; i < ARRAY_SIZE(script_packet->headers); ++i) {
+	for (i = 0; i < ARRAY_SIZE(script_packet->headers); ++i)
+	{
 		if (script_packet->headers[i].type == HEADER_NONE)
 			break;
 
@@ -947,20 +1051,20 @@ static int verify_outbound_live_headers(
 
 /* Return true iff the TCP options for the packets are bytewise identical. */
 static bool same_tcp_options(struct packet *packet_a,
-			     struct packet *packet_b)
+                             struct packet *packet_b)
 {
 	return ((packet_tcp_options_len(packet_a) ==
-		 packet_tcp_options_len(packet_b)) &&
-		(memcmp(packet_tcp_options(packet_a),
-			packet_tcp_options(packet_b),
-			packet_tcp_options_len(packet_a)) == 0));
+	         packet_tcp_options_len(packet_b)) &&
+	        (memcmp(packet_tcp_options(packet_a),
+	                packet_tcp_options(packet_b),
+	                packet_tcp_options_len(packet_a)) == 0));
 }
 
 /* Verify that the TCP option values matched expected values. */
 static int verify_outbound_live_tcp_options(
-	struct config *config,
-	struct packet *actual_packet,
-	struct packet *script_packet, char **error)
+    struct config *config,
+    struct packet *actual_packet,
+    struct packet *script_packet, char **error)
 {
 	/* See if we should validate TCP options at all. */
 	if (script_packet->flags & FLAG_OPTIONS_NOCHECK)
@@ -972,7 +1076,8 @@ static int verify_outbound_live_tcp_options(
 
 	/* Otherwise, see if we just have a slight difference in TS val. */
 	if (script_packet->tcp_ts_val != NULL &&
-	    actual_packet->tcp_ts_val != NULL) {
+	        actual_packet->tcp_ts_val != NULL)
+	{
 		u32 script_ts_val = packet_tcp_ts_val(script_packet);
 		u32 actual_ts_val = packet_tcp_ts_val(actual_packet);
 
@@ -980,10 +1085,17 @@ static int verify_outbound_live_tcp_options(
 		 * within our configured tolerance.
 		 */
 		if (config->tcp_ts_tick_usecs &&
-		    ((abs((s32)(actual_ts_val - script_ts_val)) *
-		      config->tcp_ts_tick_usecs) >
-		     config->tolerance_usecs)) {
+		        ((abs((s32)(actual_ts_val - script_ts_val)) *
+		          config->tcp_ts_tick_usecs) >
+		         config->tolerance_usecs))
+		{
+#ifdef ECOS
+			int len = strlen("bad outbound TCP timestamp value");
+			*error = malloc(len);
+			snprintf(*error, len, "bad outbound TCP timestamp value");
+#else
 			asprintf(error, "bad outbound TCP timestamp value");
+#endif
 			return STATUS_ERR;
 		}
 
@@ -998,16 +1110,21 @@ static int verify_outbound_live_tcp_options(
 		if (is_same)
 			return STATUS_OK;
 	}
-
+#ifdef ECOS
+	int len = strlen("bad outbound TCP options");
+	*error = malloc(len);
+	snprintf(*error, len, "bad outbound TCP options");
+#else
 	asprintf(error, "bad outbound TCP options");
+#endif
 	return STATUS_ERR;	/* The TCP options did not match */
 }
 
 
 /* Verify TCP/UDP payload matches expected value. */
 static int verify_outbound_live_payload(
-	struct packet *actual_packet,
-	struct packet *script_packet, char **error)
+    struct packet *actual_packet,
+    struct packet *script_packet, char **error)
 {
 	/* Diff the TCP/UDP data payloads. We've already implicitly
 	 * checked their length by checking the IP and TCP/UDP headers.
@@ -1015,9 +1132,16 @@ static int verify_outbound_live_payload(
 	assert(packet_payload_len(actual_packet) ==
 	       packet_payload_len(script_packet));
 	if (memcmp(packet_payload(script_packet),
-		   packet_payload(actual_packet),
-		   packet_payload_len(script_packet)) != 0) {
+	           packet_payload(actual_packet),
+	           packet_payload_len(script_packet)) != 0)
+	{
+#ifdef ECOS
+		int len = strlen("incorrect outbound data payload");
+		*error = malloc(len);
+		snprintf(*error, len, "incorrect outbound data payload");
+#else
 		asprintf(error, "incorrect outbound data payload");
+#endif
 		return STATUS_ERR;
 	}
 	return STATUS_OK;
@@ -1030,9 +1154,9 @@ static int verify_outbound_live_payload(
  * return STATUS_WARN upon non-fatal failures.
  */
 static int verify_outbound_live_packet(
-	struct state *state, struct socket *socket,
-	struct packet *script_packet, struct packet *live_packet,
-	char **error)
+    struct state *state, struct socket *socket,
+    struct packet *script_packet, struct packet *live_packet,
+    char **error)
 {
 	DEBUGP("verify_outbound_live_packet\n");
 
@@ -1047,7 +1171,7 @@ static int verify_outbound_live_packet(
 	 */
 	struct packet *actual_packet = packet_copy(live_packet);
 	s64 actual_usecs = live_time_to_script_time_usecs(
-		state, live_packet->time_usecs);
+	                       state, live_packet->time_usecs);
 
 	/* Before mapping, see if the live outgoing checksums are correct. */
 	if (verify_outbound_live_checksums(live_packet, error))
@@ -1055,27 +1179,31 @@ static int verify_outbound_live_packet(
 
 	/* Map live packet values into script space for easy comparison. */
 	if (map_outbound_live_packet(
-		    socket, live_packet, actual_packet, script_packet, error))
+	            socket, live_packet, actual_packet, script_packet, error))
 		goto out;
 
 	/* Verify actual IP, TCP/UDP header values matched expected ones. */
-	if (verify_outbound_live_headers(actual_packet, script_packet, error)) {
+	if (verify_outbound_live_headers(actual_packet, script_packet, error))
+	{
 		non_fatal = true;
 		goto out;
 	}
 
-	if (script_packet->tcp) {
+	if (script_packet->tcp)
+	{
 		/* Verify TCP options matched expected values. */
 		if (verify_outbound_live_tcp_options(
-			    state->config, actual_packet, script_packet,
-			    error)) {
+		            state->config, actual_packet, script_packet,
+		            error))
+		{
 			non_fatal = true;
 			goto out;
 		}
 	}
 
 	/* Verify TCP/UDP payload matches expected value. */
-	if (verify_outbound_live_payload(actual_packet, script_packet, error)) {
+	if (verify_outbound_live_payload(actual_packet, script_packet, error))
+	{
 		non_fatal = true;
 		goto out;
 	}
@@ -1083,8 +1211,9 @@ static int verify_outbound_live_packet(
 	/* Verify that kernel sent packet at the time the script expected. */
 	DEBUGP("packet time_usecs: %lld\n", live_packet->time_usecs);
 	if (verify_time(state, time_type, script_usecs,
-				script_usecs_end, live_packet->time_usecs,
-				"outbound packet", error)) {
+	                script_usecs_end, live_packet->time_usecs,
+	                "outbound packet", error))
+	{
 		non_fatal = true;
 		goto out;
 	}
@@ -1093,15 +1222,17 @@ static int verify_outbound_live_packet(
 
 out:
 	add_packet_dump(error, "script", script_packet, script_usecs,
-			DUMP_SHORT);
-	if (actual_packet != NULL) {
+	                DUMP_SHORT);
+	if (actual_packet != NULL)
+	{
 		add_packet_dump(error, "actual", actual_packet, actual_usecs,
-				DUMP_SHORT);
+		                DUMP_SHORT);
 		packet_free(actual_packet);
 	}
 	if (result == STATUS_ERR &&
-	    non_fatal &&
-	    state->config->non_fatal_packet) {
+	        non_fatal &&
+	        state->config->non_fatal_packet)
+	{
 		result = STATUS_WARN;
 	}
 	return result;
@@ -1109,24 +1240,25 @@ out:
 
 /* Sniff the next outbound live packet and return it. */
 static int sniff_outbound_live_packet(
-	struct state *state, struct socket *expected_socket,
-	struct packet **packet, char **error)
+    struct state *state, struct socket *expected_socket,
+    struct packet **packet, char **error)
 {
 	DEBUGP("sniff_outbound_live_packet\n");
 	struct socket *socket = NULL;
 	enum direction_t direction = DIRECTION_INVALID;
 	assert(*packet == NULL);
-	while (1) {
+	while (1)
+	{
 		if (netdev_receive(state->netdev, packet, error))
 			return STATUS_ERR;
 		/* See if the packet matches an existing, known socket. */
 		socket = find_socket_for_live_packet(state, *packet,
-						     &direction);
+		                                     &direction);
 		if ((socket != NULL) && (direction == DIRECTION_OUTBOUND))
 			break;
 		/* See if the packet matches a recent connect() call. */
 		socket = find_connect_for_live_packet(state, *packet,
-						      &direction);
+		                                      &direction);
 		if ((socket != NULL) && (direction == DIRECTION_OUTBOUND))
 			break;
 		packet_free(*packet);
@@ -1137,8 +1269,16 @@ static int sniff_outbound_live_packet(
 	assert(socket != NULL);
 	assert(direction == DIRECTION_OUTBOUND);
 
-	if (socket != expected_socket) {
+	if (socket != expected_socket)
+	{
+
+#ifdef ECOS
+		int len = strlen("packet is not for expected socket");
+		*error = malloc(len);
+		snprintf(*error, len, "packet is not for expected socket");
+#else
 		asprintf(error, "packet is not for expected socket");
+#endif
 		return STATUS_ERR;
 	}
 	return STATUS_OK;
@@ -1146,7 +1286,7 @@ static int sniff_outbound_live_packet(
 
 /* Return true iff the given packet could be sent/received by the socket. */
 static bool is_script_packet_match_for_socket(
-	struct state *state, struct packet *packet, struct socket *socket)
+    struct state *state, struct packet *packet, struct socket *socket)
 {
 	const bool is_packet_icmp = (packet->icmpv4 || packet->icmpv6);
 
@@ -1161,39 +1301,46 @@ static bool is_script_packet_match_for_socket(
 
 /* Find or create a socket object matching the given packet. */
 static int find_or_create_socket_for_script_packet(
-	struct state *state, struct packet *packet,
-	enum direction_t direction, struct socket **socket,
-	char **error)
+    struct state *state, struct packet *packet,
+    enum direction_t direction, struct socket **socket,
+    char **error)
 {
 	*socket = NULL;
 
 	DEBUGP("find_or_create_socket_for_script_packet\n");
 
-	if (packet->tcp != NULL) {
+	if (packet->tcp != NULL)
+	{
 		/* Is this an inbound packet matching a listening
 		 * socket? If so, this call will create a new child
 		 * socket object.
 		 */
 		*socket = handle_listen_for_script_packet(state,
-							  packet, direction);
+		                                          packet, direction);
 		if (*socket != NULL)
 			return STATUS_OK;
 
 		/* Is this an outbound packet matching a connecting socket? */
 		*socket = handle_connect_for_script_packet(state,
-							   packet, direction);
+		                                           packet, direction);
 		if (*socket != NULL)
 			return STATUS_OK;
 	}
 	/* See if there is an existing connection to handle this packet. */
 	if (state->socket_under_test != NULL &&
-	    is_script_packet_match_for_socket(state, packet,
-					      state->socket_under_test)) {
+	        is_script_packet_match_for_socket(state, packet,
+	                                          state->socket_under_test))
+	{
 		*socket = state->socket_under_test;
 		return STATUS_OK;
 	}
-
+#ifdef ECOS
+	int len = strlen("no matching socket for script packet");
+	*error = malloc(len);
+	snprintf(*error, len, "no matching socket for script packet");
+#else
 	asprintf(error, "no matching socket for script packet");
+#endif
 	return STATUS_ERR;
 }
 
@@ -1203,20 +1350,28 @@ static int find_or_create_socket_for_script_packet(
  * failures.
  */
 static int do_outbound_script_packet(
-	struct state *state, struct packet *packet,
-	struct socket *socket,	char **error)
+    struct state *state, struct packet *packet,
+    struct socket *socket,	char **error)
 {
 	DEBUGP("do_outbound_script_packet\n");
 	int result = STATUS_ERR;		/* return value */
 	struct packet *live_packet = NULL;
 
-	if ((packet->icmpv4 != NULL) || (packet->icmpv6 != NULL)) {
+	if ((packet->icmpv4 != NULL) || (packet->icmpv6 != NULL))
+	{
+#ifdef ECOS
+		int len = strlen("outbound ICMP packets are not supported");
+		*error = malloc(len);
+		snprintf(*error, len, "outbound ICMP packets are not supported");
+#else
 		asprintf(error, "outbound ICMP packets are not supported");
+#endif
 		goto out;
 	}
 
 	if ((socket->state == SOCKET_PASSIVE_PACKET_RECEIVED) &&
-	    packet->tcp && packet->tcp->syn && packet->tcp->ack) {
+	        packet->tcp && packet->tcp->syn && packet->tcp->ack)
+	{
 		/* Script says we should see an outbound server SYNACK. */
 		socket->script.local_isn = ntohl(packet->tcp->seq);
 		DEBUGP("SYNACK script.local_isn: %u\n",
@@ -1228,7 +1383,8 @@ static int do_outbound_script_packet(
 		goto out;
 
 	if ((socket->state == SOCKET_PASSIVE_PACKET_RECEIVED) &&
-	    packet->tcp && packet->tcp->syn && packet->tcp->ack) {
+	        packet->tcp && packet->tcp->syn && packet->tcp->ack)
+	{
 		socket->state = SOCKET_PASSIVE_SYNACK_SENT;
 		socket->live.local_isn = ntohl(live_packet->tcp->seq);
 		DEBUGP("SYNACK live.local_isn: %u\n",
@@ -1236,8 +1392,8 @@ static int do_outbound_script_packet(
 	}
 
 	verbose_packet_dump(state, "outbound sniffed", live_packet,
-			    live_time_to_script_time_usecs(
-				    state, live_packet->time_usecs));
+	                    live_time_to_script_time_usecs(
+	                        state, live_packet->time_usecs));
 
 	/* Save the TCP header so we can reset the connection at the end. */
 	if (live_packet->tcp)
@@ -1245,7 +1401,7 @@ static int do_outbound_script_packet(
 
 	/* Verify the bits the kernel sent were what the script expected. */
 	result = verify_outbound_live_packet(
-			state, socket, packet, live_packet, error);
+	             state, socket, packet, live_packet, error);
 
 out:
 	if (live_packet != NULL)
@@ -1255,7 +1411,7 @@ out:
 
 /* Checksum the packet and inject it into the kernel under test. */
 static int send_live_ip_packet(struct netdev *netdev,
-			       struct packet *packet)
+                               struct packet *packet)
 {
 	assert(packet->ip_bytes > 0);
 	/* We do IPv4 and IPv6 */
@@ -1271,18 +1427,21 @@ static int send_live_ip_packet(struct netdev *netdev,
 
 /* Perform the action implied by an inbound packet in a script */
 static int do_inbound_script_packet(
-	struct state *state, struct packet *packet,
-	struct socket *socket,	char **error)
+    struct state *state, struct packet *packet,
+    struct socket *socket,	char **error)
 {
 	DEBUGP("do_inbound_script_packet\n");
 	int result = STATUS_ERR;	/* return value */
 
 	if ((socket->state == SOCKET_PASSIVE_SYNACK_SENT) &&
-	    packet->tcp && packet->tcp->ack) {
+	        packet->tcp && packet->tcp->ack)
+	{
 		/* Received the ACK that completes the 3-way handshake. */
 		socket->state = SOCKET_PASSIVE_SYNACK_ACKED;
-	} else if ((socket->state == SOCKET_ACTIVE_SYN_SENT) &&
-		   packet->tcp && packet->tcp->syn && packet->tcp->ack) {
+	}
+	else if ((socket->state == SOCKET_ACTIVE_SYN_SENT) &&
+	         packet->tcp && packet->tcp->syn && packet->tcp->ack)
+	{
 		/* Received the server's SYNACK, which ACKs our SYN. */
 		socket->state = SOCKET_ACTIVE_SYN_ACKED;
 		socket->script.remote_isn	= ntohl(packet->tcp->seq);
@@ -1296,14 +1455,15 @@ static int do_inbound_script_packet(
 		goto out;
 
 	verbose_packet_dump(state, "inbound injected", live_packet,
-			    live_time_to_script_time_usecs(
-				    state, now_usecs()));
+	                    live_time_to_script_time_usecs(
+	                        state, now_usecs()));
 
-	if (live_packet->tcp) {
+	if (live_packet->tcp)
+	{
 		/* Save the TCP header so we can reset the connection later. */
 		socket->last_injected_tcp_header = *(live_packet->tcp);
 		socket->last_injected_tcp_payload_len =
-			packet_payload_len(live_packet);
+		    packet_payload_len(live_packet);
 	}
 
 	/* Inject live packet into kernel. */
@@ -1315,8 +1475,8 @@ out:
 }
 
 int run_packet_event(
-	struct state *state, struct event *event, struct packet *packet,
-	char **error)
+    struct state *state, struct event *event, struct packet *packet,
+    char **error)
 {
 	DEBUGP("%d: packet\n", event->line_number);
 
@@ -1328,12 +1488,13 @@ int run_packet_event(
 	assert(direction != DIRECTION_INVALID);
 
 	if (find_or_create_socket_for_script_packet(
-		    state, packet, direction, &socket, &err))
+	            state, packet, direction, &socket, &err))
 		goto out;
 
 	assert(socket != NULL);
 
-	if (direction == DIRECTION_OUTBOUND) {
+	if (direction == DIRECTION_OUTBOUND)
+	{
 		/* We don't wait for outbound event packets because we
 		 * want to start sniffing ASAP in order to see if
 		 * packets go out earlier than the script specifies.
@@ -1343,11 +1504,15 @@ int run_packet_event(
 			goto out;
 		else if (result == STATUS_ERR)
 			goto out;
-	} else if (direction == DIRECTION_INBOUND) {
+	}
+	else if (direction == DIRECTION_INBOUND)
+	{
 		wait_for_event(state);
 		if (do_inbound_script_packet(state, packet, socket, &err))
 			goto out;
-	} else {
+	}
+	else
+	{
 		assert(!"bad direction");  /* internal bug */
 	}
 
@@ -1355,9 +1520,17 @@ int run_packet_event(
 
 out:
 	/* Format a more complete error message and return that. */
+#ifdef ECOS
+	{
+		int len = 8 + strlen("::  handling packet: \n") + strlen(state->config->script_path) + strlen(err) + 7;
+		*error = malloc(len);
+		snprintf(*error, len, "too many headers");
+	}
+#else
 	asprintf(error, "%s:%d: %s handling packet: %s\n",
-		 state->config->script_path, event->line_number,
-		 result == STATUS_ERR ? "error" : "warning", err);
+	         state->config->script_path, event->line_number,
+	         result == STATUS_ERR ? "error" : "warning", err);
+#endif
 	free(err);
 	return result;
 }
@@ -1377,26 +1550,31 @@ int reset_connection(struct state *state, struct socket *socket)
 	int result = 0;
 
 	/* Pick TCP header fields to be something the kernel will accept. */
-	if (socket->last_injected_tcp_header.ack) {
+	if (socket->last_injected_tcp_header.ack)
+	{
 		/* If we've already injected something, then use a sequence
 		 * number right after the last one we injected, and ACK
 		 * the last thing we ACKed, and offer the same receive
 		 * window we last offered.
 		 */
 		seq	= (ntohl(socket->last_injected_tcp_header.seq) +
-			   (socket->last_injected_tcp_header.syn ? 1 : 0) +
-			   (socket->last_injected_tcp_header.fin ? 1 : 0) +
-			   socket->last_injected_tcp_payload_len);
+		       (socket->last_injected_tcp_header.syn ? 1 : 0) +
+		       (socket->last_injected_tcp_header.fin ? 1 : 0) +
+		       socket->last_injected_tcp_payload_len);
 		ack_seq	= ntohl(socket->last_injected_tcp_header.ack_seq);
 		window	= ntohs(socket->last_injected_tcp_header.window);
-	} else if (socket->last_outbound_tcp_header.ack) {
+	}
+	else if (socket->last_outbound_tcp_header.ack)
+	{
 		/* If the kernel ACKed something, then just make sure
 		 * we use the sequence number it ACKed, which will be
 		 * something it expects.
 		 */
 		seq = ntohl(socket->last_outbound_tcp_header.ack_seq);
 		ack_seq = ntohl(socket->last_outbound_tcp_header.seq);
-	} else {
+	}
+	else
+	{
 		/* If the kernel didn't ACK anything, then it probably
 		 * sent only an initial SYN. So we get to send any
 		 * sequence number we want, but should send an ACK
@@ -1407,8 +1585,8 @@ int reset_connection(struct state *state, struct socket *socket)
 	}
 
 	packet = new_tcp_packet(socket->address_family,
-				DIRECTION_INBOUND, ECN_NONE,
-				"R.", seq, 0, ack_seq, window, NULL, &error);
+	                        DIRECTION_INBOUND, ECN_NONE,
+	                        "R.", seq, 0, ack_seq, window, NULL, &error);
 	if (packet == NULL)
 		die("%s", error);
 
