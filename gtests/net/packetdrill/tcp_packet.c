@@ -35,9 +35,18 @@ static bool is_tcp_flags_spec_valid(const char *flags, char **error)
 {
 	const char *s;
 
-	for (s = flags; *s != '\0'; ++s) {
-		if (!strchr(valid_tcp_flags, *s)) {
+	for (s = flags; *s != '\0'; ++s)
+	{
+		if (!strchr(valid_tcp_flags, *s))
+		{
+
+#ifdef ECOS
+			int len = strlen("Invalid TCP flag: ''") + 1;
+			*error = malloc(len);
+			snprintf(*error, len, "Invalid TCP flag: '%c'", *s);
+#else
 			asprintf(error, "Invalid TCP flag: '%c'", *s);
+#endif
 			return false;
 		}
 	}
@@ -51,15 +60,15 @@ static inline int is_tcp_flag_set(char flag, const char *flags)
 }
 
 struct packet *new_tcp_packet(int address_family,
-			       enum direction_t direction,
-			       enum ip_ecn_t ecn,
-			       const char *flags,
-			       u32 start_sequence,
-			       u16 tcp_payload_bytes,
-			       u32 ack_sequence,
-			       s32 window,
-			       const struct tcp_options *tcp_options,
-			       char **error)
+                              enum direction_t direction,
+                              enum ip_ecn_t ecn,
+                              const char *flags,
+                              u32 start_sequence,
+                              u16 tcp_payload_bytes,
+                              u32 ack_sequence,
+                              s32 window,
+                              const struct tcp_options *tcp_options,
+                              char **error)
 {
 	struct packet *packet = NULL;  /* the newly-allocated result packet */
 	struct header *tcp_header = NULL;  /* the TCP header info */
@@ -67,35 +76,67 @@ struct packet *new_tcp_packet(int address_family,
 	const int ip_option_bytes = 0;
 	const int tcp_option_bytes = tcp_options ? tcp_options->length : 0;
 	const int ip_header_bytes = (ip_header_min_len(address_family) +
-				     ip_option_bytes);
+	                             ip_option_bytes);
 	const int tcp_header_bytes = sizeof(struct tcp) + tcp_option_bytes;
 	const int ip_bytes =
-		 ip_header_bytes + tcp_header_bytes + tcp_payload_bytes;
+	    ip_header_bytes + tcp_header_bytes + tcp_payload_bytes;
 
 	/* Sanity-check all the various lengths */
-	if (ip_option_bytes & 0x3) {
+	if (ip_option_bytes & 0x3)
+	{
+#ifdef ECOS
+		int len = strlen("IP options are not padded correctly ") + strlen("to ensure IP header is a multiple of 4 bytes: ") + strlen(" excess bytes") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "IP options are not padded correctly "
+		         "to ensure IP header is a multiple of 4 bytes: "
+		         "%d excess bytes", ip_option_bytes & 0x3);
+#else
 		asprintf(error, "IP options are not padded correctly "
-			 "to ensure IP header is a multiple of 4 bytes: "
-			 "%d excess bytes", ip_option_bytes & 0x3);
+		         "to ensure IP header is a multiple of 4 bytes: "
+		         "%d excess bytes", ip_option_bytes & 0x3);
+#endif
 		return NULL;
 	}
-	if (tcp_option_bytes & 0x3) {
+	if (tcp_option_bytes & 0x3)
+	{
+#ifdef ECOS
+		int len = strlen("TCP options are not padded correctly ") + strlen("to ensure TCP header is a multiple of 4 bytes: ") + strlen(" excess bytes") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "TCP options are not padded correctly "
+		         "to ensure TCP header is a multiple of 4 bytes: "
+		         "%d excess bytes", tcp_option_bytes & 0x3);
+#else
 		asprintf(error,
-			 "TCP options are not padded correctly "
-			 "to ensure TCP header is a multiple of 4 bytes: "
-			 "%d excess bytes", tcp_option_bytes & 0x3);
+		         "TCP options are not padded correctly "
+		         "to ensure TCP header is a multiple of 4 bytes: "
+		         "%d excess bytes", tcp_option_bytes & 0x3);
+#endif
 		return NULL;
 	}
 	assert((tcp_header_bytes & 0x3) == 0);
 	assert((ip_header_bytes & 0x3) == 0);
 
-	if (tcp_header_bytes > MAX_TCP_HEADER_BYTES) {
+	if (tcp_header_bytes > MAX_TCP_HEADER_BYTES)
+	{
+#ifdef ECOS
+		int len = strlen("TCP header too large");
+		*error = malloc(len);
+		snprintf(*error, len, "TCP header too large");
+#else
 		asprintf(error, "TCP header too large");
+#endif
 		return NULL;
 	}
 
-	if (ip_bytes > MAX_TCP_DATAGRAM_BYTES) {
+	if (ip_bytes > MAX_TCP_DATAGRAM_BYTES)
+	{
+#ifdef ECOS
+		int len = strlen("TCP segment too large");
+		*error = malloc(len);
+		snprintf(*error, len, "TCP segment too large");
+#else
 		asprintf(error, "TCP segment too large");
+#endif
 		return NULL;
 	}
 
@@ -112,7 +153,7 @@ struct packet *new_tcp_packet(int address_family,
 
 	/* Set IP header fields */
 	set_packet_ip_header(packet, address_family, ip_bytes, ecn,
-			     IPPROTO_TCP);
+	                     IPPROTO_TCP);
 
 	tcp_header = packet_append_header(packet, HEADER_TCP, tcp_header_bytes);
 	tcp_header->total_bytes = tcp_header_bytes + tcp_payload_bytes;
@@ -127,15 +168,26 @@ struct packet *new_tcp_packet(int address_family,
 	packet->tcp->seq = htonl(start_sequence);
 	packet->tcp->ack_seq = htonl(ack_sequence);
 	packet->tcp->doff = tcp_header_bytes / 4;
-	if (window == -1) {
-		if (direction == DIRECTION_INBOUND) {
+	if (window == -1)
+	{
+		if (direction == DIRECTION_INBOUND)
+		{
+#ifdef ECOS
+			int len = strlen("window must be specified") + strlen(" for inbound packets");
+			*error = malloc(len);
+			snprintf(*error, len, "window must be specified"
+			         " for inbound packets");
+#else
 			asprintf(error, "window must be specified"
-				 " for inbound packets");
+			         " for inbound packets");
+#endif
 			return NULL;
 		}
 		packet->tcp->window = 0;
 		packet->flags |= FLAG_WIN_NOCHECK;
-	} else {
+	}
+	else
+	{
 		packet->tcp->window = htons(window);
 	}
 	packet->tcp->check = 0;
@@ -149,9 +201,12 @@ struct packet *new_tcp_packet(int address_family,
 	packet->tcp->ece = is_tcp_flag_set('E', flags);
 	packet->tcp->cwr = is_tcp_flag_set('W', flags);
 
-	if (tcp_options == NULL) {
+	if (tcp_options == NULL)
+	{
 		packet->flags |= FLAG_OPTIONS_NOCHECK;
-	} else if (tcp_options->length > 0) {
+	}
+	else if (tcp_options->length > 0)
+	{
 		/* Copy TCP options into packet */
 		memcpy(tcp_option_start, tcp_options->data,
 		       tcp_options->length);
