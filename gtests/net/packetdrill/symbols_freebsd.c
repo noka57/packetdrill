@@ -23,7 +23,7 @@
  * Allows us to map from symbolic strings to integers for system call inputs.
  */
 
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(ECOS)
 
 #include "symbols.h"
 
@@ -31,19 +31,25 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/udp.h>
+#ifndef ECOS
 #include <poll.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifndef ECOS
 #include <sys/unistd.h>
-
+#else
+#include <cyg/io/file.h>
+#endif
 #include "tcp.h"
 
 /* A table of platform-specific string->int mappings. */
-struct int_symbol platform_symbols_table[] = {
+struct int_symbol platform_symbols_table[] =
+{
 
 	/* /usr/include/sys/socket.h */
 	{ SO_DEBUG,                         "SO_DEBUG"                        },
@@ -57,11 +63,15 @@ struct int_symbol platform_symbols_table[] = {
 	{ SO_OOBINLINE,                     "SO_OOBINLINE"                    },
 	{ SO_REUSEPORT,                     "SO_REUSEPORT"                    },
 	{ SO_TIMESTAMP,                     "SO_TIMESTAMP"                    },
+#ifndef ECOS
 	{ SO_NOSIGPIPE,                     "SO_NOSIGPIPE"                    },
+#endif
 	{ SO_ACCEPTFILTER,                  "SO_ACCEPTFILTER"                 },
+#ifndef ECOS
 	{ SO_BINTIME,                       "SO_BINTIME"                      },
 	{ SO_NO_OFFLOAD,                    "SO_NO_OFFLOAD"                   },
 	{ SO_NO_DDP,                        "SO_NO_DDP"                       },
+#endif
 	{ SO_SNDBUF,                        "SO_SNDBUF"                       },
 	{ SO_RCVBUF,                        "SO_RCVBUF"                       },
 	{ SO_SNDLOWAT,                      "SO_SNDLOWAT"                     },
@@ -70,6 +80,7 @@ struct int_symbol platform_symbols_table[] = {
 	{ SO_RCVTIMEO,                      "SO_RCVTIMEO"                     },
 	{ SO_ERROR,                         "SO_ERROR"                        },
 	{ SO_TYPE,                          "SO_TYPE"                         },
+#ifndef ECOS
 	{ SO_LABEL,                         "SO_LABEL"                        },
 	{ SO_PEERLABEL,                     "SO_PEERLABEL"                    },
 	{ SO_LISTENQLIMIT,                  "SO_LISTENQLIMIT"                 },
@@ -77,16 +88,17 @@ struct int_symbol platform_symbols_table[] = {
 	{ SO_LISTENINCQLEN,                 "SO_LISTENINCQLEN"                },
 	{ SO_SETFIB,                        "SO_SETFIB"                       },
 	{ SO_USER_COOKIE,                   "SO_USER_COOKIE"                  },
-
+#endif
 	/* /usr/include/netinet/tcp.h */
 	{ TCP_NODELAY,                      "TCP_NODELAY"                     },
 	{ TCP_MAXSEG,                       "TCP_MAXSEG"                      },
 	{ TCP_NOPUSH,                       "TCP_NOPUSH"                      },
 	{ TCP_NOOPT,                        "TCP_NOOPT"                       },
+#ifndef ECOS
 	{ TCP_MD5SIG,                       "TCP_MD5SIG"                      },
 	{ TCP_INFO,                         "TCP_INFO"                        },
 	{ TCP_CONGESTION,                   "TCP_CONGESTION"                  },
-
+#endif
 	/* /usr/include/sys/fcntl.h */
 	{ O_RDONLY,                         "O_RDONLY"                        },
 	{ O_WRONLY,                         "O_WRONLY"                        },
@@ -96,16 +108,21 @@ struct int_symbol platform_symbols_table[] = {
 	{ FWRITE,                           "FWRITE"                          },
 	{ O_NONBLOCK,                       "O_NONBLOCK"                      },
 	{ O_APPEND,                         "O_APPEND"                        },
+#ifndef ECOS
 	{ O_SHLOCK,                         "O_SHLOCK"                        },
 	{ O_EXLOCK,                         "O_EXLOCK"                        },
 	{ O_ASYNC,                          "O_ASYNC"                         },
 	{ O_FSYNC,                          "O_FSYNC"                         },
+#endif
 	{ O_SYNC,                           "O_SYNC"                          },
+#ifndef ECOS
 	{ O_NOFOLLOW,                       "O_NOFOLLOW"                      },
+#endif
 	{ O_CREAT,                          "O_CREAT"                         },
 	{ O_TRUNC,                          "O_TRUNC"                         },
 	{ O_EXCL,                           "O_EXCL"                          },
 	{ O_NOCTTY,                         "O_NOCTTY"                        },
+#ifndef ECOS
 	{ O_DIRECT,                         "O_DIRECT"                        },
 	{ O_DIRECTORY,                      "O_DIRECTORY"                     },
 	{ O_EXEC,                           "O_EXEC"                          },
@@ -114,7 +131,9 @@ struct int_symbol platform_symbols_table[] = {
 	{ FAPPEND,                          "FAPPEND"                         },
 	{ FASYNC,                           "FASYNC"                          },
 	{ FFSYNC,                           "FFSYNC"                          },
+#endif
 	{ FNONBLOCK,                        "FNONBLOCK"                       },
+#ifndef ECOS
 	{ FNDELAY,                          "FNDELAY"                         },
 	{ O_NDELAY,                         "O_NDELAY"                        },
 	{ FRDAHEAD,                         "FRDAHEAD"                        },
@@ -123,34 +142,40 @@ struct int_symbol platform_symbols_table[] = {
 	{ AT_SYMLINK_NOFOLLOW,              "AT_SYMLINK_NOFOLLOW"             },
 	{ AT_SYMLINK_FOLLOW,                "AT_SYMLINK_FOLLOW"               },
 	{ AT_REMOVEDIR,                     "AT_REMOVEDIR"                    },
+#endif
 	{ F_DUPFD,                          "F_DUPFD"                         },
 	{ F_GETFD,                          "F_GETFD"                         },
 	{ F_SETFD,                          "F_SETFD"                         },
 	{ F_GETFL,                          "F_GETFL"                         },
 	{ F_SETFL,                          "F_SETFL"                         },
+#ifndef ECOS
 	{ F_GETOWN,                         "F_GETOWN"                        },
 	{ F_SETOWN,                         "F_SETOWN"                        },
 	{ F_OGETLK,                         "F_OGETLK"                        },
 	{ F_OSETLK,                         "F_OSETLK"                        },
 	{ F_OSETLKW,                        "F_OSETLKW"                       },
 	{ F_DUP2FD,                         "F_DUP2FD"                        },
+#endif
 	{ F_GETLK,                          "F_GETLK"                         },
 	{ F_SETLK,                          "F_SETLK"                         },
 	{ F_SETLKW,                         "F_SETLKW"                        },
+#ifndef ECOS
 	{ F_SETLK_REMOTE,                   "F_SETLK_REMOTE"                  },
 	{ F_READAHEAD,                      "F_READAHEAD"                     },
 	{ F_RDAHEAD,                        "F_RDAHEAD"                       },
+#endif
 	{ FD_CLOEXEC,                       "FD_CLOEXEC"                      },
 	{ F_RDLCK,                          "F_RDLCK"                         },
 	{ F_UNLCK,                          "F_UNLCK"                         },
 	{ F_WRLCK,                          "F_WRLCK"                         },
+#ifndef ECOS
 	{ F_UNLCKSYS,                       "F_UNLCKSYS"                      },
 	{ F_CANCEL,                         "F_CANCEL"                        },
 	{ LOCK_SH,                          "LOCK_SH"                         },
 	{ LOCK_EX,                          "LOCK_EX"                         },
 	{ LOCK_NB,                          "LOCK_NB"                         },
 	{ LOCK_UN,                          "LOCK_UN"                         },
-
+#endif
 	/* /usr/include/sys/unistd.h */
 	{ SEEK_SET,                         "SEEK_SET"                        },
 	{ SEEK_CUR,                         "SEEK_CUR"                        },
@@ -164,19 +189,26 @@ struct int_symbol platform_symbols_table[] = {
 	{ MSG_TRUNC,                        "MSG_TRUNC"                       },
 	{ MSG_CTRUNC,                       "MSG_CTRUNC"                      },
 	{ MSG_WAITALL,                      "MSG_WAITALL"                     },
+#ifndef ECOS
 	{ MSG_NOTIFICATION,                 "MSG_NOTIFICATION"                },
+#endif
 	{ MSG_DONTWAIT,                     "MSG_DONTWAIT"                    },
 	{ MSG_EOF,                          "MSG_EOF"                         },
+#ifndef ECOS
 	{ MSG_NBIO,                         "MSG_NBIO"                        },
+#endif
 	{ MSG_COMPAT,                       "MSG_COMPAT"                      },
+#ifndef ECOS
 	{ MSG_NOSIGNAL,                     "MSG_NOSIGNAL"                    },
 
 	/* /usr/include/sys/filio.h */
 	{ FIOCLEX,                          "FIOCLEX"                         },
 	{ FIONCLEX,                         "FIONCLEX"                        },
+#endif
 	{ FIONREAD,                         "FIONREAD"                        },
 	{ FIONBIO,                          "FIONBIO"                         },
 	{ FIOASYNC,                         "FIOASYNC"                        },
+#ifndef ECOS
 	{ FIOSETOWN,                        "FIOSETOWN"                       },
 	{ FIOGETOWN,                        "FIOGETOWN"                       },
 	{ FIODTYPE,                         "FIODTYPE"                        },
@@ -199,7 +231,7 @@ struct int_symbol platform_symbols_table[] = {
 	{ POLLERR,                          "POLLERR"                         },
 	{ POLLHUP,                          "POLLHUP"                         },
 	{ POLLNVAL,                         "POLLNVAL"                        },
-
+#endif
 	/* /usr/include/sys/errno.h */
 	{ EPERM,                            "EPERM"                           },
 	{ ENOENT,                           "ENOENT"                          },
@@ -207,15 +239,21 @@ struct int_symbol platform_symbols_table[] = {
 	{ EINTR,                            "EINTR"                           },
 	{ EIO,                              "EIO"                             },
 	{ ENXIO,                            "ENXIO"                           },
+#ifndef ECOS
 	{ E2BIG,                            "E2BIG"                           },
 	{ ENOEXEC,                          "ENOEXEC"                         },
+#endif
 	{ EBADF,                            "EBADF"                           },
+#ifndef ECOS
 	{ ECHILD,                           "ECHILD"                          },
+#endif
 	{ EDEADLK,                          "EDEADLK"                         },
 	{ ENOMEM,                           "ENOMEM"                          },
 	{ EACCES,                           "EACCES"                          },
+#ifndef ECOS
 	{ EFAULT,                           "EFAULT"                          },
 	{ ENOTBLK,                          "ENOTBLK"                         },
+#endif
 	{ EBUSY,                            "EBUSY"                           },
 	{ EEXIST,                           "EEXIST"                          },
 	{ EXDEV,                            "EXDEV"                           },
@@ -226,12 +264,16 @@ struct int_symbol platform_symbols_table[] = {
 	{ ENFILE,                           "ENFILE"                          },
 	{ EMFILE,                           "EMFILE"                          },
 	{ ENOTTY,                           "ENOTTY"                          },
+#ifndef ECOS
 	{ ETXTBSY,                          "ETXTBSY"                         },
+#endif
 	{ EFBIG,                            "EFBIG"                           },
 	{ ENOSPC,                           "ENOSPC"                          },
 	{ ESPIPE,                           "ESPIPE"                          },
 	{ EROFS,                            "EROFS"                           },
+#ifndef ECOS
 	{ EMLINK,                           "EMLINK"                          },
+#endif
 	{ EPIPE,                            "EPIPE"                           },
 	{ EDOM,                             "EDOM"                            },
 	{ ERANGE,                           "ERANGE"                          },
@@ -264,11 +306,14 @@ struct int_symbol platform_symbols_table[] = {
 	{ ETOOMANYREFS,                     "ETOOMANYREFS"                    },
 	{ ETIMEDOUT,                        "ETIMEDOUT"                       },
 	{ ECONNREFUSED,                     "ECONNREFUSED"                    },
+#ifndef ECOS
 	{ ELOOP,                            "ELOOP"                           },
+#endif
 	{ ENAMETOOLONG,                     "ENAMETOOLONG"                    },
 	{ EHOSTDOWN,                        "EHOSTDOWN"                       },
 	{ EHOSTUNREACH,                     "EHOSTUNREACH"                    },
 	{ ENOTEMPTY,                        "ENOTEMPTY"                       },
+#ifndef ECOS
 	{ EPROCLIM,                         "EPROCLIM"                        },
 	{ EUSERS,                           "EUSERS"                          },
 	{ EDQUOT,                           "EDQUOT"                          },
@@ -280,7 +325,9 @@ struct int_symbol platform_symbols_table[] = {
 	{ EPROGMISMATCH,                    "EPROGMISMATCH"                   },
 	{ EPROCUNAVAIL,                     "EPROCUNAVAIL"                    },
 	{ ENOLCK,                           "ENOLCK"                          },
+#endif
 	{ ENOSYS,                           "ENOSYS"                          },
+#ifndef ECOS
 	{ EFTYPE,                           "EFTYPE"                          },
 	{ EAUTH,                            "EAUTH"                           },
 	{ ENEEDAUTH,                        "ENEEDAUTH"                       },
@@ -297,7 +344,7 @@ struct int_symbol platform_symbols_table[] = {
 	{ EPROTO,                           "EPROTO"                          },
 	{ ENOTCAPABLE,                      "ENOTCAPABLE"                     },
 	{ ECAPMODE,                         "ECAPMODE"                        },
-
+#endif
 	/* Sentinel marking the end of the table. */
 	{ 0, NULL },
 };
