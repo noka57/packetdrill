@@ -156,29 +156,37 @@ int ipv4_header_append(struct packet *packet,
 	ipv4 = header->h.ipv4;
 	set_ip_header(ipv4, AF_INET, 0, ECN_NONE, 0);
 
-	if (inet_pton(AF_INET, ip_src, &ipv4->src_ip) != 1)
-	{
 #ifdef ECOS
+	if (inet_pton_PATCH(AF_INET, ip_src, &ipv4->src_ip) != 1)
+	{
 		int len = strlen("bad IPv4 src address: ''\n") + strlen(ip_src);
 		*error = malloc(len);
 		snprintf(*error, len, "bad IPv4 src address: '%s'\n", ip_src);
-#else
-		asprintf(error, "bad IPv4 src address: '%s'\n", ip_src);
-#endif
 		return STATUS_ERR;
 	}
-
-	if (inet_pton(AF_INET, ip_dst, &ipv4->dst_ip) != 1)
+#else
+	if (inet_pton(AF_INET, ip_src, &ipv4->src_ip) != 1)
 	{
+		asprintf(error, "bad IPv4 src address: '%s'\n", ip_src);
+		return STATUS_ERR;
+	}
+#endif
+
 #ifdef ECOS
+	if (inet_pton_PATCH(AF_INET, ip_dst, &ipv4->dst_ip) != 1)
+	{
 		int len = strlen("bad IPv4 dst address: ''\n") + strlen(ip_dst);
 		*error = malloc(len);
 		snprintf(*error, len, "bad IPv4 dst address: '%s'\n", ip_dst);
-#else
-		asprintf(error, "bad IPv4 dst address: '%s'\n", ip_dst);
-#endif
 		return STATUS_ERR;
 	}
+#else
+	if (inet_pton(AF_INET, ip_dst, &ipv4->dst_ip) != 1)
+	{
+		asprintf(error, "bad IPv4 dst address: '%s'\n", ip_dst);
+		return STATUS_ERR;
+	}
+#endif
 
 	return STATUS_OK;
 }
@@ -208,29 +216,38 @@ int ipv6_header_append(struct packet *packet,
 	ipv6 = header->h.ipv6;
 	set_ip_header(ipv6, AF_INET6, sizeof(struct ipv6), ECN_NONE, 0);
 
-	if (inet_pton(AF_INET6, ip_src, &ipv6->src_ip) != 1)
-	{
+
 #ifdef ECOS
+	if (inet_pton_PATCH(AF_INET6, ip_src, &ipv6->src_ip) != 1)
+	{
 		int len = strlen("bad IPv6 src address: ''\n") + strlen(ip_src);
 		*error = malloc(len);
 		snprintf(*error, len, "bad IPv6 src address: '%s'\n", ip_src);
-#else
-		asprintf(error, "bad IPv6 src address: '%s'\n", ip_src);
-#endif
 		return STATUS_ERR;
 	}
-
-	if (inet_pton(AF_INET6, ip_dst, &ipv6->dst_ip) != 1)
+#else
+	if (inet_pton(AF_INET6, ip_src, &ipv6->src_ip) != 1)
 	{
+		asprintf(error, "bad IPv6 src address: '%s'\n", ip_src);
+		return STATUS_ERR;
+	}
+#endif
+
 #ifdef ECOS
+	if (inet_pton_PATCH(AF_INET6, ip_dst, &ipv6->dst_ip) != 1)
+	{
 		int len = strlen("bad IPv6 dst address: ''\n") + strlen(ip_dst);
 		*error = malloc(len);
 		snprintf(*error, len, "bad IPv6 dst address: '%s'\n", ip_dst);
-#else
-		asprintf(error, "bad IPv6 dst address: '%s'\n", ip_dst);
-#endif
 		return STATUS_ERR;
 	}
+#else
+	if (inet_pton(AF_INET6, ip_dst, &ipv6->dst_ip) != 1)
+	{
+		asprintf(error, "bad IPv6 dst address: '%s'\n", ip_dst);
+		return STATUS_ERR;
+	}
+#endif
 
 	return STATUS_OK;
 }

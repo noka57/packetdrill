@@ -417,7 +417,7 @@ char *get_available_file_name(void)
 
 
 int
-inet_pton(af, src, dst)
+inet_pton_PATCH(af, src, dst)
 int af;
 const char *src;
 void *dst;
@@ -615,7 +615,7 @@ static const char *inet_ntop6(const u_char *src, char *dst, size_t size);
  *	Paul Vixie, 1996.
  */
 const char *
-inet_ntop(int af, const void *src, char *dst, size_t size)
+inet_ntop_PATCH(int af, const void *src, char *dst, size_t size)
 {
 	switch (af)
 	{

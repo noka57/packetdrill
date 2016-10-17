@@ -11,8 +11,8 @@ typedef struct pollfd
 } pollfd_t;
 #endif
 
-int inet_pton (int, const char *, void *);
-const char *inet_ntop (int, const void *, char *, size_t);
+int inet_pton_PATCH (int, const char *, void *);
+const char *inet_ntop_PATCH (int, const void *, char *, size_t);
 char * strndup(const char *, size_t);
 int poll(struct pollfd *fds, nfds_t nfds, int timeout);
 

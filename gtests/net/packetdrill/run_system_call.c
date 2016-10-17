@@ -2165,7 +2165,13 @@ static void invoke_system_call(
 			break;
 	if (i == ARRAY_SIZE(system_call_table))
 	{
+#ifdef ECOS
+		int len = strlen("Unknown system call: ''") + strlen(name);
+		error = malloc(len);
+		snprintf(error, len, "Unknown system call: '%s'", name);
+#else
 		asprintf(&error, "Unknown system call: '%s'", name);
+#endif
 		goto error_out;
 	}
 
@@ -2227,6 +2233,9 @@ static int yield(void)
 #elif defined(__FreeBSD__) || defined(__OpenBSD__)
 	pthread_yield();
 	return 0;
+#elif defined(ECOS)
+	cyg_thread_yield();
+	return 0;
 #elif defined(__NetBSD__)
 	return sched_yield();
 #endif  /* defined(__NetBSD__) */
@@ -2242,8 +2251,16 @@ static void enqueue_system_call(
 	/* Wait if there are back-to-back blocking system calls. */
 	if (await_idle_thread(state))
 	{
+
+#ifdef ECOS
+		int len = strlen("blocking system call while another blocking ") + strlen("system call is already in progress");
+		error = malloc(len);
+		snprintf(error, len, "blocking system call while another blocking "
+		         "system call is already in progress");
+#else
 		asprintf(&error, "blocking system call while another blocking "
 		         "system call is already in progress");
+#endif
 		goto error_out;
 	}
 

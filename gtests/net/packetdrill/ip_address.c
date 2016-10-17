@@ -112,8 +112,11 @@ struct ip_address ipv4_parse(const char *ip_string)
 {
 	struct ip_address ipv4;
 	ipv4_init(&ipv4);
-
+#ifdef ECOS
+	if (inet_pton_PATCH(AF_INET, ip_string, &ipv4.ip.v4) != 1)
+#else
 	if (inet_pton(AF_INET, ip_string, &ipv4.ip.v4) != 1)
+#endif
 		die("bad IPv4 address: %s\n", ip_string);
 
 	return ipv4;
@@ -123,8 +126,11 @@ struct ip_address ipv6_parse(const char *ip_string)
 {
 	struct ip_address ipv6;
 	ipv6_init(&ipv6);
-
+#ifdef ECOS
+	if (inet_pton_PATCH(AF_INET6, ip_string, &ipv6.ip.v6) != 1)
+#else
 	if (inet_pton(AF_INET6, ip_string, &ipv6.ip.v6) != 1)
+#endif
 		die("bad IPv6 address: %s\n", ip_string);
 
 	return ipv6;
@@ -132,7 +138,11 @@ struct ip_address ipv6_parse(const char *ip_string)
 
 const char *ip_to_string(const struct ip_address *ip, char *buffer)
 {
+#ifdef ECOS
+	if (!inet_ntop_PATCH(ip->address_family, &ip->ip, buffer, ADDR_STR_LEN))
+#else
 	if (!inet_ntop(ip->address_family, &ip->ip, buffer, ADDR_STR_LEN))
+#endif
 		die_perror("inet_ntop");
 
 	return buffer;
