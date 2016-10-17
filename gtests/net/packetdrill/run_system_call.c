@@ -31,24 +31,34 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <netinet/in.h>
+#ifndef ECOS
 #include <poll.h>
+#endif
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#ifndef ECOS
 #include <sys/syscall.h>
+#endif
 #include <sys/types.h>
 #include <sys/uio.h>
+#ifndef ECOS
 #include <sys/sendfile.h>
+#endif
 #include <time.h>
 #include <unistd.h>
 #include "logging.h"
 #include "run.h"
 #include "script.h"
 
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#endif
+
 static int to_live_fd(struct state *state, int script_fd, int *live_fd,
-		      char **error);
+                      char **error);
 
 /* Provide a wrapper for the Linux gettid() system call (glibc does not). */
 static pid_t gettid(void)
@@ -56,7 +66,7 @@ static pid_t gettid(void)
 #ifdef linux
 	return syscall(__NR_gettid);
 #endif
-#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(ECOS)
 	/* TODO(ncardwell): Implement me. XXX */
 	return 0;
 #endif /* defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)*/
@@ -84,7 +94,13 @@ static bool is_thread_sleeping(pid_t process_id, pid_t thread_id)
 {
 	/* Read the entire thread state file, using the buffer size ps uses. */
 	char *proc_path = NULL;
+#ifdef ECOS
+	int len = strlen("/proc//task//stat") + 16;
+	proc_path = malloc(len);
+	snprintf(proc_path, len, "/proc/%d/task/%d/stat", process_id, thread_id);
+#else
 	asprintf(&proc_path, "/proc/%d/task/%d/stat", process_id, thread_id);
+#endif
 	const int STATE_BUFFER_BYTES = 1023;
 	char *state = calloc(STATE_BUFFER_BYTES, 1);
 	read_whole_file(proc_path, state, STATE_BUFFER_BYTES - 1);
@@ -94,7 +110,8 @@ static bool is_thread_sleeping(pid_t process_id, pid_t thread_id)
 	const int THREAD_STATE_INDEX = 3;
 	const char *field = state;
 	int i = 0;
-	for (i = 0; i < THREAD_STATE_INDEX - 1; i++) {
+	for (i = 0; i < THREAD_STATE_INDEX - 1; i++)
+	{
 		field = strchr(field, ' ');
 		if (field == NULL)
 			die("unable to parse %s\n", proc_path);
@@ -112,7 +129,8 @@ static bool is_thread_sleeping(pid_t process_id, pid_t thread_id)
 static int expression_list_length(struct expression_list *list)
 {
 	int count = 0;
-	while (list != NULL) {
+	while (list != NULL)
+	{
 		list = list->next;
 		++count;
 	}
@@ -129,13 +147,21 @@ static int get_arg_count(struct expression_list *args)
  * STATUS_ERR and sets error message.
  */
 static int check_arg_count(struct expression_list *args, int expected,
-			   char **error)
+                           char **error)
 {
 	assert(expected >= 0);
 	int actual = get_arg_count(args);
-	if (actual != expected) {
+	if (actual != expected)
+	{
+#ifdef ECOS
+		int len = strlen("Expected  args but got ") + 16;
+		*error = malloc(len);
+		snprintf(*error, len, "Expected %d args but got %d", expected,
+		         actual);
+#else
 		asprintf(error, "Expected %d args but got %d", expected,
-			 actual);
+		         actual);
+#endif
 		return STATUS_ERR;
 	}
 	return STATUS_OK;
@@ -145,18 +171,28 @@ static int check_arg_count(struct expression_list *args, int expected,
  * success; on failure returns NULL and sets error message.
  */
 static struct expression *get_arg(struct expression_list *args,
-				   int index, char **error)
+                                  int index, char **error)
 {
 	assert(index >= 0);
 	int current = 0;
-	while ((args != NULL) && (current < index)) {
+	while ((args != NULL) && (current < index))
+	{
 		args = args->next;
 		++current;
 	}
-	if ((args != NULL) && (current == index)) {
+	if ((args != NULL) && (current == index))
+	{
 		return args->expression;
-	} else {
+	}
+	else
+	{
+#ifdef ECOS
+		int len = strlen("Argument list too short");
+		*error = malloc(len);
+		snprintf(*error, len, "Argument list too short");
+#else
 		asprintf(error, "Argument list too short");
+#endif
 		return NULL;
 	}
 }
@@ -166,15 +202,27 @@ static struct expression *get_arg(struct expression_list *args,
  * message about the mismatch and return STATUS_ERR.
  */
 static int check_type(struct expression *expression,
-		      enum expression_t expected_type,
-		      char **error)
+                      enum expression_t expected_type,
+                      char **error)
 {
-	if (expression->type == expected_type) {
+	if (expression->type == expected_type)
+	{
 		return STATUS_OK;
-	} else {
+	}
+	else
+	{
+
+#ifdef ECOS
+		int len = strlen("Bad type; actual:  expected: ") + strlen(expression_type_to_string(expression->type)) + strlen(expression_type_to_string(expected_type));
+		*error = malloc(len);
+		snprintf(*error, len, "Bad type; actual: %s expected: %s",
+		         expression_type_to_string(expression->type),
+		         expression_type_to_string(expected_type));
+#else
 		asprintf(error, "Bad type; actual: %s expected: %s",
-			 expression_type_to_string(expression->type),
-			 expression_type_to_string(expected_type));
+		         expression_type_to_string(expression->type),
+		         expression_type_to_string(expected_type));
+#endif
 		return STATUS_ERR;
 	}
 }
@@ -184,15 +232,23 @@ static int check_type(struct expression *expression,
  * success; on failure returns STATUS_ERR and sets error message.
  */
 static int get_s32(struct expression *expression,
-		   s32 *value, char **error)
+                   s32 *value, char **error)
 {
 	if (check_type(expression, EXPR_INTEGER, error))
 		return STATUS_ERR;
 	if ((expression->value.num > UINT_MAX) ||
-	    (expression->value.num < INT_MIN)) {
+	        (expression->value.num < INT_MIN))
+	{
+#ifdef ECOS
+		int len = strlen("Value out of range for 32-bit integer: ") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "Value out of range for 32-bit integer: %lld",
+		         expression->value.num);
+#else
 		asprintf(error,
-			 "Value out of range for 32-bit integer: %lld",
-			 expression->value.num);
+		         "Value out of range for 32-bit integer: %lld",
+		         expression->value.num);
+#endif
 		return STATUS_ERR;
 	}
 	*value = expression->value.num;
@@ -203,7 +259,7 @@ static int get_s32(struct expression *expression,
  * that it has the expected type.
  */
 static int s32_arg(struct expression_list *args,
-		   int index, s32 *value, char **error)
+                   int index, s32 *value, char **error)
 {
 	struct expression *expression = get_arg(args, index, error);
 	if (expression == NULL)
@@ -215,7 +271,7 @@ static int s32_arg(struct expression_list *args,
  * that it has the expected type: a list with a single integer.
  */
 static int s32_bracketed_arg(struct expression_list *args,
-			     int index, s32 *value, char **error)
+                             int index, s32 *value, char **error)
 {
 	struct expression_list *list;
 	struct expression *expression;
@@ -226,9 +282,16 @@ static int s32_bracketed_arg(struct expression_list *args,
 	if (check_type(expression, EXPR_LIST, error))
 		return STATUS_ERR;
 	list = expression->value.list;
-	if (expression_list_length(list) != 1) {
+	if (expression_list_length(list) != 1)
+	{
+#ifdef ECOS
+		int len = strlen("Expected [<integer>] but got multiple elements");
+		*error = malloc(len);
+		snprintf(*error, len, "Expected [<integer>] but got multiple elements");
+#else
 		asprintf(error,
-			 "Expected [<integer>] but got multiple elements");
+		         "Expected [<integer>] but got multiple elements");
+#endif
 		return STATUS_ERR;
 	}
 	return get_s32(list->expression, value, error);
@@ -266,8 +329,8 @@ static void iovec_free(struct iovec *iov, size_t iov_len)
  * STATUS_ERR.
  */
 static int iovec_new(struct expression *expression,
-		     struct iovec **iov_ptr, size_t *iov_len_ptr,
-		     char **error)
+                     struct iovec **iov_ptr, size_t *iov_len_ptr,
+                     char **error)
 {
 	int status = STATUS_ERR;
 	int i;
@@ -283,7 +346,8 @@ static int iovec_new(struct expression *expression,
 	iov_len = expression_list_length(list);
 	iov = calloc(iov_len, sizeof(struct iovec));
 
-	for (i = 0; i < iov_len; ++i, list = list->next) {
+	for (i = 0; i < iov_len; ++i, list = list->next)
+	{
 		size_t len;
 		struct iovec_expr *iov_expr;
 
@@ -322,8 +386,8 @@ static void msghdr_free(struct msghdr *msg, size_t iov_len)
 
 /* Allocate and fill in a msghdr described by the given expression. */
 static int msghdr_new(struct expression *expression,
-		      struct msghdr **msg_ptr, size_t *iov_len_ptr,
-		      char **error)
+                      struct msghdr **msg_ptr, size_t *iov_len_ptr,
+                      char **error)
 {
 	int status = STATUS_ERR;
 	s32 s32_val = 0;
@@ -338,36 +402,49 @@ static int msghdr_new(struct expression *expression,
 
 	msg = calloc(1, sizeof(struct msghdr));
 
-	if (msg_expr->msg_name != NULL) {
+	if (msg_expr->msg_name != NULL)
+	{
 		assert(msg_expr->msg_name->type == EXPR_ELLIPSIS);
 		msg->msg_name = calloc(1, name_len);
 	}
 
-	if (msg_expr->msg_namelen != NULL) {
+	if (msg_expr->msg_namelen != NULL)
+	{
 		assert(msg_expr->msg_namelen->type == EXPR_ELLIPSIS);
 		msg->msg_namelen = name_len;
 	}
 
-	if (msg_expr->msg_iov != NULL) {
+	if (msg_expr->msg_iov != NULL)
+	{
 		if (iovec_new(msg_expr->msg_iov, &msg->msg_iov, iov_len_ptr,
-			      error))
+		              error))
 			goto error_out;
 	}
 
-	if (msg_expr->msg_iovlen != NULL) {
+	if (msg_expr->msg_iovlen != NULL)
+	{
 		if (get_s32(msg_expr->msg_iovlen, &s32_val, error))
 			goto error_out;
 		msg->msg_iovlen = s32_val;
 	}
 
-	if (msg->msg_iovlen != *iov_len_ptr) {
+	if (msg->msg_iovlen != *iov_len_ptr)
+	{
+#ifdef ECOS
+		int len = strlen("msg_iovlen  does not match -element iovec array") + 16;
+		*error = malloc(len);
+		snprintf(*error, len, "msg_iovlen %d does not match %d-element iovec array",
+		         (int)msg->msg_iovlen, (int)*iov_len_ptr);
+#else
 		asprintf(error,
-			 "msg_iovlen %d does not match %d-element iovec array",
-			 (int)msg->msg_iovlen, (int)*iov_len_ptr);
+		         "msg_iovlen %d does not match %d-element iovec array",
+		         (int)msg->msg_iovlen, (int)*iov_len_ptr);
+#endif
 		goto error_out;
 	}
 
-	if (msg_expr->msg_flags != NULL) {
+	if (msg_expr->msg_flags != NULL)
+	{
 		if (get_s32(msg_expr->msg_flags, &s32_val, error))
 			goto error_out;
 		msg->msg_flags = s32_val;
@@ -388,9 +465,9 @@ error_out:
  * human-readable error message and return STATUS_ERR.
  */
 static int pollfds_new(struct state *state,
-		       struct expression *fds_expression,
-		       struct pollfd **fds_ptr, size_t *fds_len_ptr,
-		       char **error)
+                       struct expression *fds_expression,
+                       struct pollfd **fds_ptr, size_t *fds_len_ptr,
+                       char **error)
 {
 	int status = STATUS_ERR;
 	int i;
@@ -406,7 +483,8 @@ static int pollfds_new(struct state *state,
 	fds_len = expression_list_length(list);
 	fds = calloc(fds_len, sizeof(struct pollfd));
 
-	for (i = 0; i < fds_len; ++i, list = list->next) {
+	for (i = 0; i < fds_len; ++i, list = list->next)
+	{
 		struct pollfd_expr *fds_expr;
 
 		if (check_type(list->expression, EXPR_POLLFD, error))
@@ -422,7 +500,7 @@ static int pollfds_new(struct state *state,
 			goto error_out;
 
 		if (to_live_fd(state, fds_expr->fd->value.num,
-			       &fds[i].fd, error))
+		               &fds[i].fd, error))
 			goto error_out;
 
 		fds[i].events = fds_expr->events->value.num;
@@ -443,8 +521,8 @@ error_out:
  * human-readable error message and return STATUS_ERR.
  */
 static int pollfds_check(struct expression *fds_expression,
-			 const struct pollfd *fds, size_t fds_len,
-			 char **error)
+                         const struct pollfd *fds, size_t fds_len,
+                         char **error)
 {
 	struct expression_list *list;	/* input expression from script */
 	int i;
@@ -452,7 +530,8 @@ static int pollfds_check(struct expression *fds_expression,
 	assert(fds_expression->type == EXPR_LIST);
 	list = fds_expression->value.list;
 
-	for (i = 0; i < fds_len; ++i, list = list->next) {
+	for (i = 0; i < fds_len; ++i, list = list->next)
+	{
 		struct pollfd_expr *fds_expr;
 		int expected_revents, actual_revents;
 
@@ -465,19 +544,31 @@ static int pollfds_check(struct expression *fds_expression,
 
 		expected_revents = fds_expr->revents->value.num;
 		actual_revents = fds[i].revents;
-		if (actual_revents != expected_revents) {
+		if (actual_revents != expected_revents)
+		{
 			char *expected_revents_string =
-				flags_to_string(poll_flags,
-							expected_revents);
+			    flags_to_string(poll_flags,
+			                    expected_revents);
 			char *actual_revents_string =
-				flags_to_string(poll_flags,
-							actual_revents);
+			    flags_to_string(poll_flags,
+			                    actual_revents);
+#ifdef ECOS
+			int len = 8 + strlen("Expected revents of  but got  for pollfd ") + strlen(expected_revents_string) + strlen(actual_revents_string);
+			*error = malloc(len);
+			snprintf(*error, len, "Expected revents of %s but got %s "
+			         "for pollfd %d",
+			         expected_revents_string,
+			         actual_revents_string,
+			         i);
+
+#else
 			asprintf(error,
-				 "Expected revents of %s but got %s "
-				 "for pollfd %d",
-				 expected_revents_string,
-				 actual_revents_string,
-				 i);
+			         "Expected revents of %s but got %s "
+			         "for pollfd %d",
+			         expected_revents_string,
+			         actual_revents_string,
+			         i);
+#endif
 			free(expected_revents_string);
 			free(actual_revents_string);
 			return STATUS_ERR;
@@ -494,7 +585,8 @@ static int pollfds_check(struct expression *fds_expression,
  */
 static void begin_syscall(struct state *state, struct syscall_spec *syscall)
 {
-	if (is_blocking_syscall(syscall)) {
+	if (is_blocking_syscall(syscall))
+	{
 		assert(state->syscalls->state == SYSCALL_ENQUEUED);
 		state->syscalls->state = SYSCALL_RUNNING;
 		run_unlock(state);
@@ -510,18 +602,20 @@ static void begin_syscall(struct state *state, struct syscall_spec *syscall)
  * immediately after returning from a system call in order to immediately
  * re-grab the global lock if this is a blocking call.
  */
-enum result_check_t {
+enum result_check_t
+{
 	CHECK_EXACT,		/* check that result matches exactly */
 	CHECK_NON_NEGATIVE,	/* check that result is non-negative */
 };
 static int end_syscall(struct state *state, struct syscall_spec *syscall,
-		       enum result_check_t mode, int actual, char **error)
+                       enum result_check_t mode, int actual, char **error)
 {
 	int actual_errno = errno;	/* in case we clobber this later */
 	s32 expected = 0;
 
 	/* For blocking calls, advance state and reacquire the global lock. */
-	if (is_blocking_syscall(syscall)) {
+	if (is_blocking_syscall(syscall))
+	{
 		s64 live_end_usecs = now_usecs();
 		DEBUGP("syscall thread: end_syscall grabs lock\n");
 		run_lock(state);
@@ -533,38 +627,74 @@ static int end_syscall(struct state *state, struct syscall_spec *syscall,
 	/* Compare actual vs expected return value */
 	if (get_s32(syscall->result, &expected, error))
 		return STATUS_ERR;
-	if (mode == CHECK_NON_NEGATIVE) {
-		if (actual < 0) {
+	if (mode == CHECK_NON_NEGATIVE)
+	{
+		if (actual < 0)
+		{
+#ifdef ECOS
+			int len = 16 + strlen("Expected non-negative result but got  with errno  ()") + strlen(strerror(actual_errno));
+			*error = malloc(len);
+			snprintf(*error, len, "Expected non-negative result but got %d "
+			         "with errno %d (%s)",
+			         actual, actual_errno, strerror(actual_errno));
+#else
 			asprintf(error,
-				 "Expected non-negative result but got %d "
-				 "with errno %d (%s)",
-				 actual, actual_errno, strerror(actual_errno));
+			         "Expected non-negative result but got %d "
+			         "with errno %d (%s)",
+			         actual, actual_errno, strerror(actual_errno));
+#endif
 			return STATUS_ERR;
 		}
-	} else if (mode == CHECK_EXACT) {
-		if (actual != expected) {
+	}
+	else if (mode == CHECK_EXACT)
+	{
+		if (actual != expected)
+		{
+
+#ifdef ECOS
+			int len = 24 + strlen("Expected result  but got  with errno  ()") + strlen(strerror(actual_errno));
+			*error = malloc(len);
+			snprintf(*error, len, "Expected result %d but got %d "
+			         "with errno %d (%s)",
+			         expected,
+			         actual, actual_errno, strerror(actual_errno));
+#else
 			asprintf(error,
-				 "Expected result %d but got %d "
-				 "with errno %d (%s)",
-				 expected,
-				 actual, actual_errno, strerror(actual_errno));
+			         "Expected result %d but got %d "
+			         "with errno %d (%s)",
+			         expected,
+			         actual, actual_errno, strerror(actual_errno));
+#endif
 			return STATUS_ERR;
 		}
-	} else {
+	}
+	else
+	{
 		assert(!"bad mode");
 	}
 
 	/* Compare actual vs expected errno */
-	if (syscall->error != NULL) {
+	if (syscall->error != NULL)
+	{
 		s64 expected_errno = 0;
 		if (symbol_to_int(syscall->error->errno_macro,
-					  &expected_errno, error))
+		                  &expected_errno, error))
 			return STATUS_ERR;
-		if (actual_errno != expected_errno) {
+		if (actual_errno != expected_errno)
+		{
+
+#ifdef ECOS
+			int len = 16 + strlen("Expected errno  () but got  ()") + strlen(strerror(actual_errno)) + strlen(strerror(expected_errno));
+			*error = malloc(len);
+			snprintf(*error, len, "Expected errno %d (%s) but got %d (%s)",
+			         (int)expected_errno, strerror(expected_errno),
+			         actual_errno, strerror(actual_errno));
+#else
 			asprintf(error,
-				 "Expected errno %d (%s) but got %d (%s)",
-				 (int)expected_errno, strerror(expected_errno),
-				 actual_errno, strerror(actual_errno));
+			         "Expected errno %d (%s) but got %d (%s)",
+			         (int)expected_errno, strerror(expected_errno),
+			         actual_errno, strerror(actual_errno));
+#endif
 			return STATUS_ERR;
 		}
 	}
@@ -574,11 +704,12 @@ static int end_syscall(struct state *state, struct syscall_spec *syscall,
 
 /* Return a pointer to the socket with the given script fd, or NULL. */
 static struct socket *find_socket_by_script_fd(
-	struct state *state, int script_fd)
+    struct state *state, int script_fd)
 {
 	struct socket *socket = NULL;
 	for (socket = state->sockets; socket != NULL; socket = socket->next)
-		if (!socket->is_closed && (socket->script.fd == script_fd)) {
+		if (!socket->is_closed && (socket->script.fd == script_fd))
+		{
 			assert(socket->live.fd >= 0);
 			assert(socket->script.fd >= 0);
 			return socket;
@@ -588,11 +719,12 @@ static struct socket *find_socket_by_script_fd(
 
 /* Return a pointer to the socket with the given live fd, or NULL. */
 static struct socket *find_socket_by_live_fd(
-	struct state *state, int live_fd)
+    struct state *state, int live_fd)
 {
 	struct socket *socket = NULL;
 	for (socket = state->sockets; socket != NULL; socket = socket->next)
-		if (!socket->is_closed & (socket->live.fd == live_fd)) {
+		if (!socket->is_closed & (socket->live.fd == live_fd))
+		{
 			assert(socket->live.fd >= 0);
 			assert(socket->script.fd >= 0);
 			return socket;
@@ -605,16 +737,26 @@ static struct socket *find_socket_by_live_fd(
  * error message.
  */
 static int to_live_fd(struct state *state, int script_fd, int *live_fd,
-		      char **error)
+                      char **error)
 {
 	struct socket *socket = find_socket_by_script_fd(state, script_fd);
-	if (socket != NULL) {
+	if (socket != NULL)
+	{
 		*live_fd = socket->live.fd;
 		return STATUS_OK;
-	} else {
+	}
+	else
+	{
 		*live_fd = -1;
+#ifdef ECOS
+		int len = strlen("unable to find socket with script fd ") + 4;
+		*error = malloc(len);
+		snprintf(*error, len, "unable to find socket with script fd %d",
+		         script_fd);
+#else
 		asprintf(error, "unable to find socket with script fd %d",
-			 script_fd);
+		         script_fd);
+#endif
 		return STATUS_ERR;
 	}
 }
@@ -631,29 +773,58 @@ static int to_live_fd(struct state *state, int script_fd, int *live_fd,
  * sets error message.
  */
 static struct socket *insert_new_socket(
-	struct state *state, int address_family, int protocol,
-	int script_fd, int live_fd, char **error)
+    struct state *state, int address_family, int protocol,
+    int script_fd, int live_fd, char **error)
 {
 	/* Validate fd values. */
-	if (script_fd < 0) {
+	if (script_fd < 0)
+	{
+#ifdef ECOS
+		int len = strlen("invalid socket fd  in script") + 4;
+		*error = malloc(len);
+		snprintf(*error, len, "invalid socket fd %d in script", script_fd);
+#else
 		asprintf(error, "invalid socket fd %d in script", script_fd);
+#endif
 		return NULL;
 	}
-	if (live_fd < 0) {
+	if (live_fd < 0)
+	{
+#ifdef ECOS
+		int len = strlen("invalid live socket fd ") + 4;
+		*error = malloc(len);
+		snprintf(*error, len, "invalid live socket fd %d", live_fd);
+#else
 		asprintf(error, "invalid live socket fd %d", live_fd);
+#endif
 		return NULL;
 	}
 
 	/* Look for sockets with conflicting fds. Should not happen if
 	 * the script is valid and this program is bug-free.
 	 */
-	if (find_socket_by_script_fd(state, script_fd)) {
+	if (find_socket_by_script_fd(state, script_fd))
+	{
+#ifdef ECOS
+		int len = strlen("duplicate socket fd  in script") + 4;
+		*error = malloc(len);
+		snprintf(*error, len, "duplicate socket fd %d in script",
+		         script_fd);
+#else
 		asprintf(error, "duplicate socket fd %d in script",
-			 script_fd);
+		         script_fd);
+#endif
 		return NULL;
 	}
-	if (find_socket_by_live_fd(state, live_fd)) {
+	if (find_socket_by_live_fd(state, live_fd))
+	{
+#ifdef ECOS
+		int len = strlen("duplicate live socket fd ") + 4;
+		*error = malloc(len);
+		snprintf(*error, len, "duplicate live socket fd %d", live_fd);
+#else
 		asprintf(error, "duplicate live socket fd %d", live_fd);
+#endif
 		return NULL;
 	}
 
@@ -669,12 +840,12 @@ static struct socket *insert_new_socket(
 }
 
 static int run_syscall_socket(struct state *state, int address_family,
-			      int protocol, int script_fd, int live_fd,
-			      char **error)
+                              int protocol, int script_fd, int live_fd,
+                              char **error)
 {
 	struct socket *socket = insert_new_socket(state, address_family,
-						  protocol, script_fd, live_fd,
-						  error);
+	                                          protocol, script_fd, live_fd,
+	                                          error);
 	if (socket == NULL)
 		return STATUS_ERR;
 
@@ -691,7 +862,7 @@ static int run_syscall_socket(struct state *state, int address_family,
  * sets error message.
  */
 static int run_syscall_close(struct state *state, int script_fd,
-			     int live_fd, char **error)
+                             int live_fd, char **error)
 {
 	struct socket *socket = find_socket_by_script_fd(state, script_fd);
 	if ((socket == NULL) || (socket->live.fd != live_fd))
@@ -701,9 +872,18 @@ static int run_syscall_close(struct state *state, int script_fd,
 	return STATUS_OK;
 
 error_out:
+#ifdef ECOS
+	{
+		int len = strlen("unable to find socket with script fd  and live fd ") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "unable to find socket with script fd %d and live fd %d",
+		         script_fd, live_fd);
+	}
+#else
 	asprintf(error,
-		 "unable to find socket with script fd %d and live fd %d",
-		 script_fd, live_fd);
+	         "unable to find socket with script fd %d and live fd %d",
+	         script_fd, live_fd);
+#endif
 	return STATUS_ERR;
 }
 
@@ -712,15 +892,15 @@ error_out:
  * sets error message.
  */
 static int run_syscall_bind(struct state *state,
-			    struct sockaddr *live_addr,
-			    socklen_t *live_addrlen, char **error)
+                            struct sockaddr *live_addr,
+                            socklen_t *live_addrlen, char **error)
 {
 	DEBUGP("run_syscall_bind\n");
 
 	/* Fill in the live address we want to bind to */
 	ip_to_sockaddr(&state->config->live_bind_ip,
-		       state->config->live_bind_port,
-		       live_addr, live_addrlen);
+	               state->config->live_bind_port,
+	               live_addr, live_addrlen);
 
 	return STATUS_OK;
 }
@@ -730,24 +910,42 @@ static int run_syscall_bind(struct state *state,
  * sets error message.
  */
 static int run_syscall_listen(struct state *state, int script_fd,
-			      int live_fd, char **error)
+                              int live_fd, char **error)
 {
 	struct socket *socket = NULL;
 	socket = find_socket_by_script_fd(state, script_fd);
-	if (socket != NULL) {
+	if (socket != NULL)
+	{
 		assert(socket->script.fd == script_fd);
 		assert(socket->live.fd == live_fd);
-		if (socket->state != SOCKET_NEW) {
+		if (socket->state != SOCKET_NEW)
+		{
+#ifdef ECOS
+			int len = strlen("bad listen(); script fd  in state ") + 8;
+			*error = malloc(len);
+			snprintf(*error, len, "bad listen(); script fd %d in state %d",
+			         script_fd, socket->state);
+#else
 			asprintf(error,
-				 "bad listen(); script fd %d in state %d",
-				 script_fd, socket->state);
+			         "bad listen(); script fd %d in state %d",
+			         script_fd, socket->state);
+#endif
 			return STATUS_ERR;
 		}
 		socket->state = SOCKET_PASSIVE_LISTENING;
 		return STATUS_OK;
-	} else {
+	}
+	else
+	{
+#ifdef ECOS
+		int len = strlen("unable to find socket with script fd ") + 4;
+		*error = malloc(len);
+		snprintf(*error, len, "unable to find socket with script fd %d",
+		         script_fd);
+#else
 		asprintf(error, "unable to find socket with script fd %d",
-			 script_fd);
+		         script_fd);
+#endif
 		return STATUS_ERR;
 	}
 }
@@ -758,10 +956,10 @@ static int run_syscall_listen(struct state *state, int script_fd,
  * sets error message.
  */
 static int run_syscall_accept(struct state *state,
-			      int script_accepted_fd,
-			      int live_accepted_fd,
-			      struct sockaddr *live_addr,
-			      int live_addrlen, char **error)
+                              int script_accepted_fd,
+                              int live_accepted_fd,
+                              struct sockaddr *live_addr,
+                              int live_addrlen, char **error)
 {
 	struct socket *socket = NULL;
 	struct ip_address ip;
@@ -772,35 +970,46 @@ static int run_syscall_accept(struct state *state,
 	ip_from_sockaddr(live_addr, live_addrlen, &ip, &port);
 
 	/* For ipv4-mapped-ipv6: if ip is IPv4-mapped IPv6, map it to IPv4. */
-	if (ip.address_family == AF_INET6) {
+	if (ip.address_family == AF_INET6)
+	{
 		struct ip_address ipv4;
 		if (ipv6_map_to_ipv4(ip, &ipv4) == STATUS_OK)
 			ip = ipv4;
 	}
 
-	for (socket = state->sockets; socket != NULL; socket = socket->next) {
-		if (DEBUG_LOGGING) {
+	for (socket = state->sockets; socket != NULL; socket = socket->next)
+	{
+		if (DEBUG_LOGGING)
+		{
 			char remote_string[ADDR_STR_LEN];
 			DEBUGP("socket state=%d script addr: %s:%d\n",
 			       socket->state,
 			       ip_to_string(&socket->script.remote.ip,
-					    remote_string),
+			                    remote_string),
 			       socket->script.remote.port);
 		}
 
 		if ((socket->state == SOCKET_PASSIVE_SYNACK_SENT) ||  /* TFO */
-		    (socket->state == SOCKET_PASSIVE_SYNACK_ACKED)) {
+		        (socket->state == SOCKET_PASSIVE_SYNACK_ACKED))
+		{
 			assert(is_equal_ip(&socket->live.remote.ip, &ip));
 			assert(is_equal_port(socket->live.remote.port,
-					     htons(port)));
+			                     htons(port)));
 			socket->script.fd	= script_accepted_fd;
 			socket->live.fd		= live_accepted_fd;
 			return STATUS_OK;
 		}
 	}
 
-	if (!state->config->is_wire_client) {
+	if (!state->config->is_wire_client)
+	{
+#ifdef ECOS
+		int len = strlen("unable to find socket matching accept() call");
+		*error = malloc(len);
+		snprintf(*error, len, "unable to find socket matching accept() call");
+#else
 		asprintf(error, "unable to find socket matching accept() call");
+#endif
 		return STATUS_ERR;
 	}
 
@@ -823,7 +1032,8 @@ static int run_syscall_accept(struct state *state,
 	socket->live.fd			= live_accepted_fd;
 	socket->script.fd		= script_accepted_fd;
 
-	if (DEBUG_LOGGING) {
+	if (DEBUG_LOGGING)
+	{
 		char local_string[ADDR_STR_LEN];
 		char remote_string[ADDR_STR_LEN];
 		DEBUGP("live: local: %s.%d\n",
@@ -842,27 +1052,37 @@ static int run_syscall_accept(struct state *state,
  * STATUS_ERR and sets error message.
  */
 static int run_syscall_connect(struct state *state,
-			       int script_fd,
-			       bool must_be_new_socket,
-			       struct sockaddr *live_addr,
-			       socklen_t *live_addrlen,
-			       char **error)
+                               int script_fd,
+                               bool must_be_new_socket,
+                               struct sockaddr *live_addr,
+                               socklen_t *live_addrlen,
+                               char **error)
 {
 	struct socket *socket	= NULL;
 	DEBUGP("run_syscall_connect\n");
 
 	/* Fill in the live address we want to connect to */
 	ip_to_sockaddr(&state->config->live_connect_ip,
-		       state->config->live_connect_port,
-		       live_addr, live_addrlen);
+	               state->config->live_connect_port,
+	               live_addr, live_addrlen);
 
 	socket = find_socket_by_script_fd(state, script_fd);
 	assert(socket != NULL);
-	if (socket->state != SOCKET_NEW) {
-		if (must_be_new_socket) {
+	if (socket->state != SOCKET_NEW)
+	{
+		if (must_be_new_socket)
+		{
+#ifdef ECOS
+			int len = strlen("socket is not new");
+			*error = malloc(len);
+			snprintf(*error, len, "socket is not new");
+#else
 			asprintf(error, "socket is not new");
+#endif
 			return STATUS_ERR;
-		} else {
+		}
+		else
+		{
 			return STATUS_OK;
 		}
 	}
@@ -884,7 +1104,7 @@ static int run_syscall_connect(struct state *state,
  */
 
 static int syscall_socket(struct state *state, struct syscall_spec *syscall,
-			  struct expression_list *args, char **error)
+                          struct expression_list *args, char **error)
 {
 	int domain, type, protocol, live_fd, script_fd, result;
 	if (check_arg_count(args, 3, error))
@@ -905,12 +1125,13 @@ static int syscall_socket(struct state *state, struct syscall_spec *syscall,
 	if (end_syscall(state, syscall, CHECK_NON_NEGATIVE, result, error))
 		return STATUS_ERR;
 
-	if (result >= 0) {
+	if (result >= 0)
+	{
 		live_fd = result;
 		if (get_s32(syscall->result, &script_fd, error))
 			return STATUS_ERR;
 		if (run_syscall_socket(state, domain, protocol,
-				       script_fd, live_fd, error))
+		                       script_fd, live_fd, error))
 			return STATUS_ERR;
 	}
 
@@ -918,7 +1139,7 @@ static int syscall_socket(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_bind(struct state *state, struct syscall_spec *syscall,
-			struct expression_list *args, char **error)
+                        struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, result;
 	struct sockaddr_storage live_addr;
@@ -935,8 +1156,8 @@ static int syscall_bind(struct state *state, struct syscall_spec *syscall,
 	if (ellipsis_arg(args, 2, error))
 		return STATUS_ERR;
 	if (run_syscall_bind(
-		    state,
-		    (struct sockaddr *)&live_addr, &live_addrlen, error))
+	            state,
+	            (struct sockaddr *)&live_addr, &live_addrlen, error))
 		return STATUS_ERR;
 
 	begin_syscall(state, syscall);
@@ -947,7 +1168,7 @@ static int syscall_bind(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_listen(struct state *state, struct syscall_spec *syscall,
-			  struct expression_list *args, char **error)
+                          struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, backlog, result;
 
@@ -974,7 +1195,7 @@ static int syscall_listen(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_accept(struct state *state, struct syscall_spec *syscall,
-			  struct expression_list *args, char **error)
+                          struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, live_accepted_fd, script_accepted_fd, result;
 	struct sockaddr_storage live_addr;
@@ -997,14 +1218,15 @@ static int syscall_accept(struct state *state, struct syscall_spec *syscall,
 	if (end_syscall(state, syscall, CHECK_NON_NEGATIVE, result, error))
 		return STATUS_ERR;
 
-	if (result >= 0) {
+	if (result >= 0)
+	{
 		live_accepted_fd = result;
 		if (get_s32(syscall->result, &script_accepted_fd, error))
 			return STATUS_ERR;
 		if (run_syscall_accept(
-			    state, script_accepted_fd, live_accepted_fd,
-			    (struct sockaddr *)&live_addr, live_addrlen,
-			    error))
+		            state, script_accepted_fd, live_accepted_fd,
+		            (struct sockaddr *)&live_addr, live_addrlen,
+		            error))
 			return STATUS_ERR;
 	}
 
@@ -1012,7 +1234,7 @@ static int syscall_accept(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_connect(struct state *state, struct syscall_spec *syscall,
-			   struct expression_list *args, char **error)
+                           struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, result;
 	struct sockaddr_storage live_addr;
@@ -1029,8 +1251,8 @@ static int syscall_connect(struct state *state, struct syscall_spec *syscall,
 		return STATUS_ERR;
 
 	if (run_syscall_connect(
-		    state, script_fd, true,
-		    (struct sockaddr *)&live_addr, &live_addrlen, error))
+	            state, script_fd, true,
+	            (struct sockaddr *)&live_addr, &live_addrlen, error))
 		return STATUS_ERR;
 
 	begin_syscall(state, syscall);
@@ -1041,7 +1263,7 @@ static int syscall_connect(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_read(struct state *state, struct syscall_spec *syscall,
-			struct expression_list *args, char **error)
+                        struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, count, result;
 	char *buf = NULL;
@@ -1069,7 +1291,7 @@ static int syscall_read(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_readv(struct state *state, struct syscall_spec *syscall,
-			 struct expression_list *args, char **error)
+                         struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, iov_count, result;
 	struct expression *iov_expression = NULL;
@@ -1094,10 +1316,18 @@ static int syscall_readv(struct state *state, struct syscall_spec *syscall,
 	if (s32_arg(args, 2, &iov_count, error))
 		goto error_out;
 
-	if (iov_count != iov_len) {
+	if (iov_count != iov_len)
+	{
+#ifdef ECOS
+		int len = strlen("iov_count  does not match -element iovec array") + 16;
+		*error = malloc(len);
+		snprintf(*error, len, "iov_count %d does not match %d-element iovec array",
+		         iov_count, (int)iov_len);
+#else
 		asprintf(error,
-			 "iov_count %d does not match %d-element iovec array",
-			 iov_count, (int)iov_len);
+		         "iov_count %d does not match %d-element iovec array",
+		         iov_count, (int)iov_len);
+#endif
 		goto error_out;
 	}
 
@@ -1113,7 +1343,7 @@ error_out:
 }
 
 static int syscall_recv(struct state *state, struct syscall_spec *syscall,
-			struct expression_list *args, char **error)
+                        struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, count, flags, result;
 	char *buf = NULL;
@@ -1143,7 +1373,7 @@ static int syscall_recv(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_recvfrom(struct state *state, struct syscall_spec *syscall,
-			    struct expression_list *args, char **error)
+                            struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, count, flags, result;
 	struct sockaddr_storage live_addr;
@@ -1171,7 +1401,7 @@ static int syscall_recvfrom(struct state *state, struct syscall_spec *syscall,
 	begin_syscall(state, syscall);
 
 	result = recvfrom(live_fd, buf, count, flags,
-			  (struct sockaddr *)&live_addr, &live_addrlen);
+	                  (struct sockaddr *)&live_addr, &live_addrlen);
 
 	int status = end_syscall(state, syscall, CHECK_EXACT, result, error);
 
@@ -1180,7 +1410,7 @@ static int syscall_recvfrom(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_recvmsg(struct state *state, struct syscall_spec *syscall,
-			   struct expression_list *args, char **error)
+                           struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, flags, result;
 	struct expression *msg_expression = NULL;
@@ -1214,9 +1444,17 @@ static int syscall_recvmsg(struct state *state, struct syscall_spec *syscall,
 	if (end_syscall(state, syscall, CHECK_EXACT, result, error))
 		goto error_out;
 
-	if (msg->msg_flags != expected_msg_flags) {
+	if (msg->msg_flags != expected_msg_flags)
+	{
+#ifdef ECOS
+		int len = strlen("Expected msg_flags 0x but got 0x") + 16;
+		*error = malloc(len);
+		snprintf(*error, len, "Expected msg_flags 0x%08X but got 0x%08X",
+		         expected_msg_flags, msg->msg_flags);
+#else
 		asprintf(error, "Expected msg_flags 0x%08X but got 0x%08X",
-			 expected_msg_flags, msg->msg_flags);
+		         expected_msg_flags, msg->msg_flags);
+#endif
 		goto error_out;
 	}
 
@@ -1228,7 +1466,7 @@ error_out:
 }
 
 static int syscall_write(struct state *state, struct syscall_spec *syscall,
-			 struct expression_list *args, char **error)
+                         struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, count, result;
 	char *buf = NULL;
@@ -1256,7 +1494,7 @@ static int syscall_write(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_writev(struct state *state, struct syscall_spec *syscall,
-			  struct expression_list *args, char **error)
+                          struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, iov_count, result;
 	struct expression *iov_expression = NULL;
@@ -1281,10 +1519,18 @@ static int syscall_writev(struct state *state, struct syscall_spec *syscall,
 	if (s32_arg(args, 2, &iov_count, error))
 		goto error_out;
 
-	if (iov_count != iov_len) {
+	if (iov_count != iov_len)
+	{
+#ifdef ECOS
+		int len = strlen("iov_count  does not match -element iovec array") + 16;
+		*error = malloc(len);
+		snprintf(*error, len, "iov_count %d does not match %d-element iovec array",
+		         iov_count, (int)iov_len);
+#else
 		asprintf(error,
-			 "iov_count %d does not match %d-element iovec array",
-			 iov_count, (int)iov_len);
+		         "iov_count %d does not match %d-element iovec array",
+		         iov_count, (int)iov_len);
+#endif
 		goto error_out;
 	}
 
@@ -1300,7 +1546,7 @@ error_out:
 }
 
 static int syscall_send(struct state *state, struct syscall_spec *syscall,
-			struct expression_list *args, char **error)
+                        struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, count, flags, result;
 	char *buf = NULL;
@@ -1330,7 +1576,7 @@ static int syscall_send(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_sendto(struct state *state, struct syscall_spec *syscall,
-			  struct expression_list *args, char **error)
+                          struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, count, flags, result;
 	struct sockaddr_storage live_addr;
@@ -1354,8 +1600,8 @@ static int syscall_sendto(struct state *state, struct syscall_spec *syscall,
 		return STATUS_ERR;
 
 	if (run_syscall_connect(
-		    state, script_fd, false,
-		    (struct sockaddr *)&live_addr, &live_addrlen, error))
+	            state, script_fd, false,
+	            (struct sockaddr *)&live_addr, &live_addrlen, error))
 		return STATUS_ERR;
 
 	buf = calloc(count, 1);
@@ -1364,7 +1610,7 @@ static int syscall_sendto(struct state *state, struct syscall_spec *syscall,
 	begin_syscall(state, syscall);
 
 	result = sendto(live_fd, buf, count, flags,
-			(struct sockaddr *)&live_addr, live_addrlen);
+	                (struct sockaddr *)&live_addr, live_addrlen);
 
 	int status = end_syscall(state, syscall, CHECK_EXACT, result, error);
 
@@ -1373,7 +1619,7 @@ static int syscall_sendto(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_sendmsg(struct state *state, struct syscall_spec *syscall,
-			   struct expression_list *args, char **error)
+                           struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, flags, result;
 	struct expression *msg_expression = NULL;
@@ -1398,11 +1644,18 @@ static int syscall_sendmsg(struct state *state, struct syscall_spec *syscall,
 		goto error_out;
 
 	if ((msg->msg_name != NULL) &&
-	    run_syscall_connect(state, script_fd, false,
-				msg->msg_name, &msg->msg_namelen, error))
+	        run_syscall_connect(state, script_fd, false,
+	                            msg->msg_name, &msg->msg_namelen, error))
 		goto error_out;
-	if (msg->msg_flags != 0) {
+	if (msg->msg_flags != 0)
+	{
+#ifdef ECOS
+		int len = strlen("sendmsg ignores msg_flags field in msghdr");
+		*error = malloc(len);
+		snprintf(*error, len, "sendmsg ignores msg_flags field in msghdr");
+#else
 		asprintf(error, "sendmsg ignores msg_flags field in msghdr");
+#endif
 		goto error_out;
 	}
 
@@ -1418,15 +1671,23 @@ error_out:
 }
 
 static int syscall_fcntl(struct state *state, struct syscall_spec *syscall,
-			 struct expression_list *args, char **error)
+                         struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, command, result;
 
 	/* fcntl is an odd system call - it can take either 2 or 3 args. */
 	int actual_arg_count = get_arg_count(args);
-	if ((actual_arg_count != 2) && (actual_arg_count != 3)) {
+	if ((actual_arg_count != 2) && (actual_arg_count != 3))
+	{
+#ifdef ECOS
+		int len = strlen("fcntl expected 2-3 args but got ") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "fcntl expected 2-3 args but got %d",
+		         actual_arg_count);
+#else
 		asprintf(error, "fcntl expected 2-3 args but got %d",
-			 actual_arg_count);
+		         actual_arg_count);
+#endif
 		return STATUS_ERR;
 	}
 
@@ -1437,18 +1698,23 @@ static int syscall_fcntl(struct state *state, struct syscall_spec *syscall,
 	if (s32_arg(args, 1, &command, error))
 		return STATUS_ERR;
 
-	if (actual_arg_count == 2) {
+	if (actual_arg_count == 2)
+	{
 		begin_syscall(state, syscall);
 
 		result = fcntl(live_fd, command);
-	} else if (actual_arg_count == 3) {
+	}
+	else if (actual_arg_count == 3)
+	{
 		s32 arg;
 		if (s32_arg(args, 2, &arg, error))
 			return STATUS_ERR;
 		begin_syscall(state, syscall);
 
 		result = fcntl(live_fd, command, arg);
-	} else {
+	}
+	else
+	{
 		assert(0);	/* not reached */
 	}
 
@@ -1456,15 +1722,23 @@ static int syscall_fcntl(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_ioctl(struct state *state, struct syscall_spec *syscall,
-			 struct expression_list *args, char **error)
+                         struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, command, result;
 
 	/* ioctl is an odd system call - it can take either 2 or 3 args. */
 	int actual_arg_count = get_arg_count(args);
-	if ((actual_arg_count != 2) && (actual_arg_count != 3)) {
+	if ((actual_arg_count != 2) && (actual_arg_count != 3))
+	{
+#ifdef ECOS
+		int len = strlen("ioctl expected 2-3 args but got ") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "ioctl expected 2-3 args but got %d",
+		         actual_arg_count);
+#else
 		asprintf(error, "ioctl expected 2-3 args but got %d",
-			 actual_arg_count);
+		         actual_arg_count);
+#endif
 		return STATUS_ERR;
 	}
 
@@ -1475,14 +1749,17 @@ static int syscall_ioctl(struct state *state, struct syscall_spec *syscall,
 	if (s32_arg(args, 1, &command, error))
 		return STATUS_ERR;
 
-	if (actual_arg_count == 2) {
+	if (actual_arg_count == 2)
+	{
 		begin_syscall(state, syscall);
 
 		result = ioctl(live_fd, command);
 
 		return end_syscall(state, syscall, CHECK_EXACT, result, error);
 
-	} else if (actual_arg_count == 3) {
+	}
+	else if (actual_arg_count == 3)
+	{
 		s32 script_optval, live_optval;
 
 		if (s32_bracketed_arg(args, 2, &script_optval, error))
@@ -1495,22 +1772,32 @@ static int syscall_ioctl(struct state *state, struct syscall_spec *syscall,
 		if (end_syscall(state, syscall, CHECK_EXACT, result, error))
 			return STATUS_ERR;
 
-		if (live_optval != script_optval) {
+		if (live_optval != script_optval)
+		{
+#ifdef ECOS
+			int len = strlen("Bad ioctl optval: expected:  actual: ") + 16;
+			*error = malloc(len);
+			snprintf(*error, len, "Bad ioctl optval: expected: %d actual: %d",
+			         (int)script_optval, (int)live_optval);
+#else
 			asprintf(error,
-				 "Bad ioctl optval: expected: %d actual: %d",
-				 (int)script_optval, (int)live_optval);
+			         "Bad ioctl optval: expected: %d actual: %d",
+			         (int)script_optval, (int)live_optval);
+#endif
 			return STATUS_ERR;
 		}
 
 		return STATUS_OK;
-	} else {
+	}
+	else
+	{
 		assert(0);	/* not reached */
 	}
 	return STATUS_ERR;
 }
 
 static int syscall_close(struct state *state, struct syscall_spec *syscall,
-			 struct expression_list *args, char **error)
+                         struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, result;
 	if (check_arg_count(args, 1, error))
@@ -1534,7 +1821,7 @@ static int syscall_close(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_shutdown(struct state *state, struct syscall_spec *syscall,
-			    struct expression_list *args, char **error)
+                            struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, how, result;
 	if (check_arg_count(args, 2, error))
@@ -1557,7 +1844,7 @@ static int syscall_shutdown(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
-			      struct expression_list *args, char **error)
+                              struct expression_list *args, char **error)
 {
 	int script_fd, live_fd, level, optname, result;
 	s32 script_optval, live_optval, script_optlen;
@@ -1576,30 +1863,54 @@ static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
 		return STATUS_ERR;
 	if (s32_bracketed_arg(args, 4, &script_optlen, error))
 		return STATUS_ERR;
-	if (script_optlen != 4) {
+	if (script_optlen != 4)
+	{
+#ifdef ECOS
+		int len = strlen("Unsupported getsockopt optlen: ") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "Unsupported getsockopt optlen: %d",
+		         (int)script_optlen);
+#else
 		asprintf(error, "Unsupported getsockopt optlen: %d",
-			 (int)script_optlen);
+		         (int)script_optlen);
+#endif
 		return STATUS_ERR;
 	}
 
 	begin_syscall(state, syscall);
 
 	result = getsockopt(live_fd, level, optname,
-			    &live_optval, &live_optlen);
+	                    &live_optval, &live_optlen);
 
 	if (end_syscall(state, syscall, CHECK_EXACT, result, error))
 		return STATUS_ERR;
 
-	if ((int)live_optlen != script_optlen) {
+	if ((int)live_optlen != script_optlen)
+	{
+#ifdef ECOS
+		int len = strlen("Bad getsockopt optlen: expected:  actual: ") + 16;
+		*error = malloc(len);
+		snprintf(*error, len, "Bad getsockopt optlen: expected: %d actual: %d",
+		         (int)script_optlen, (int)live_optlen);
+#else
 		asprintf(error,
-			 "Bad getsockopt optlen: expected: %d actual: %d",
-			 (int)script_optlen, (int)live_optlen);
+		         "Bad getsockopt optlen: expected: %d actual: %d",
+		         (int)script_optlen, (int)live_optlen);
+#endif
 		return STATUS_ERR;
 	}
-	if (live_optval != script_optval) {
+	if (live_optval != script_optval)
+	{
+#ifdef ECOS
+		int len = strlen("Bad getsockopt optval: expected:  actual:  ") + 16;
+		*error = malloc(len);
+		snprintf(*error, len, "Bad getsockopt optval: expected: %d actual: %d",
+		         (int)script_optval, (int)live_optval);
+#else
 		asprintf(error,
-			 "Bad getsockopt optval: expected: %d actual: %d",
-			 (int)script_optval, (int)live_optval);
+		         "Bad getsockopt optval: expected: %d actual: %d",
+		         (int)script_optval, (int)live_optval);
+#endif
 		return STATUS_ERR;
 	}
 
@@ -1607,7 +1918,7 @@ static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_setsockopt(struct state *state, struct syscall_spec *syscall,
-			      struct expression_list *args, char **error)
+                              struct expression_list *args, char **error)
 {
 	int script_fd, live_fd, level, optname, optval_s32, optlen, result;
 	void *optval = NULL;
@@ -1629,18 +1940,33 @@ static int syscall_setsockopt(struct state *state, struct syscall_spec *syscall,
 	val_expression = get_arg(args, 3, error);
 	if (val_expression == NULL)
 		return STATUS_ERR;
-	if (val_expression->type == EXPR_LINGER) {
+	if (val_expression->type == EXPR_LINGER)
+	{
 		optval = &val_expression->value.linger;
-	} else if (val_expression->type == EXPR_STRING) {
+	}
+	else if (val_expression->type == EXPR_STRING)
+	{
 		optval = val_expression->value.string;
-	} else if (val_expression->type == EXPR_LIST) {
+	}
+	else if (val_expression->type == EXPR_LIST)
+	{
 		if (s32_bracketed_arg(args, 3, &optval_s32, error))
 			return STATUS_ERR;
 		optval = &optval_s32;
-	} else {
+	}
+	else
+	{
+#ifdef ECOS
+		int len = strlen("unsupported setsockopt value type: ") + strlen(expression_type_to_string(val_expression->type));
+		*error = malloc(len);
+		snprintf(*error, len, "unsupported setsockopt value type: %s",
+		         expression_type_to_string(
+		             val_expression->type));
+#else
 		asprintf(error, "unsupported setsockopt value type: %s",
-			 expression_type_to_string(
-				 val_expression->type));
+		         expression_type_to_string(
+		             val_expression->type));
+#endif
 		return STATUS_ERR;
 	}
 
@@ -1652,7 +1978,7 @@ static int syscall_setsockopt(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_poll(struct state *state, struct syscall_spec *syscall,
-			struct expression_list *args, char **error)
+                        struct expression_list *args, char **error)
 {
 	struct expression *fds_expression = NULL;
 	struct pollfd *fds = NULL;
@@ -1674,10 +2000,18 @@ static int syscall_poll(struct state *state, struct syscall_spec *syscall,
 	if (s32_arg(args, 2, &timeout, error))
 		goto error_out;
 
-	if (nfds != fds_len) {
+	if (nfds != fds_len)
+	{
+#ifdef ECOS
+		int len = strlen("nfds  does not match -element pollfd array") + 16;
+		*error = malloc(len);
+		snprintf(*error, len, "nfds %d does not match %d-element pollfd array",
+		         nfds, (int)fds_len);
+#else
 		asprintf(error,
-			 "nfds %d does not match %d-element pollfd array",
-			 nfds, (int)fds_len);
+		         "nfds %d does not match %d-element pollfd array",
+		         nfds, (int)fds_len);
+#endif
 		goto error_out;
 	}
 
@@ -1699,7 +2033,7 @@ error_out:
 }
 
 static int syscall_open(struct state *state, struct syscall_spec *syscall,
-			struct expression_list *args, char **error)
+                        struct expression_list *args, char **error)
 {
 	int script_fd, live_fd, result;
 	struct expression *name_expression;
@@ -1722,12 +2056,13 @@ static int syscall_open(struct state *state, struct syscall_spec *syscall,
 	if (end_syscall(state, syscall, CHECK_NON_NEGATIVE, result, error))
 		return STATUS_ERR;
 
-	if (result >= 0) {
+	if (result >= 0)
+	{
 		live_fd = result;
 		if (get_s32(syscall->result, &script_fd, error))
 			return STATUS_ERR;
 		if (!insert_new_socket(state, 0, 0,
-				       script_fd, live_fd, error))
+		                       script_fd, live_fd, error))
 			return STATUS_ERR;
 	}
 
@@ -1735,7 +2070,7 @@ static int syscall_open(struct state *state, struct syscall_spec *syscall,
 }
 
 static int syscall_sendfile(struct state *state, struct syscall_spec *syscall,
-			    struct expression_list *args, char **error)
+                            struct expression_list *args, char **error)
 {
 	int live_outfd, script_outfd;
 	int live_infd, script_infd;
@@ -1762,23 +2097,27 @@ static int syscall_sendfile(struct state *state, struct syscall_spec *syscall,
 	live_offset = script_offset;
 
 	begin_syscall(state, syscall);
-
+#ifdef ECOS
+	result = sendfile_PATCH(live_outfd, live_infd, &live_offset, count);
+#else
 	result = sendfile(live_outfd, live_infd, &live_offset, count);
-
+#endif
 	status = end_syscall(state, syscall, CHECK_EXACT, result, error);
 
 	return status;
 }
 
 /* A dispatch table with all the system calls that we support... */
-struct system_call_entry {
+struct system_call_entry
+{
 	const char *name;
 	int (*function) (struct state *state,
-			 struct syscall_spec *syscall,
-			 struct expression_list *args,
-			 char **error);
+	                 struct syscall_spec *syscall,
+	                 struct expression_list *args,
+	                 char **error);
 };
-struct system_call_entry system_call_table[] = {
+struct system_call_entry system_call_table[] =
+{
 	{"socket",     syscall_socket},
 	{"bind",       syscall_bind},
 	{"listen",     syscall_listen},
@@ -1807,7 +2146,7 @@ struct system_call_entry system_call_table[] = {
 
 /* Evaluate the system call arguments and invoke the system call. */
 static void invoke_system_call(
-	struct state *state, struct event *event, struct syscall_spec *syscall)
+    struct state *state, struct event *event, struct syscall_spec *syscall)
 {
 	DEBUGP("%d: invoke call: %s\n", event->line_number, syscall->name);
 
@@ -1824,7 +2163,8 @@ static void invoke_system_call(
 	for (i = 0; i < ARRAY_SIZE(system_call_table); ++i)
 		if (strcmp(name, system_call_table[i].name) == 0)
 			break;
-	if (i == ARRAY_SIZE(system_call_table)) {
+	if (i == ARRAY_SIZE(system_call_table))
+	{
 		asprintf(&error, "Unknown system call: '%s'", name);
 		goto error_out;
 	}
@@ -1859,9 +2199,11 @@ static int await_idle_thread(struct state *state)
 {
 	struct timespec end_time = { .tv_sec = 0, .tv_nsec = 0 };
 	const int MAX_WAIT_SECS = 1;
-	while (state->syscalls->state != SYSCALL_IDLE) {
+	while (state->syscalls->state != SYSCALL_IDLE)
+	{
 		/* On the first time through the loop, calculate end time. */
-		if (end_time.tv_sec == 0) {
+		if (end_time.tv_sec == 0)
+		{
 			if (clock_gettime(CLOCK_REALTIME, &end_time) != 0)
 				die_perror("clock_gettime");
 			end_time.tv_sec += MAX_WAIT_SECS;
@@ -1869,7 +2211,7 @@ static int await_idle_thread(struct state *state)
 		/* Wait for a signal or our timeout end_time to arrive. */
 		DEBUGP("main thread: awaiting idle syscall thread\n");
 		int status = pthread_cond_timedwait(&state->syscalls->idle,
-						    &state->mutex, &end_time);
+		                                    &state->mutex, &end_time);
 		if (status == ETIMEDOUT)
 			return STATUS_ERR;
 		else if (status != 0)
@@ -1892,15 +2234,16 @@ static int yield(void)
 
 /* Enqueue the system call for the syscall thread and wake up the thread. */
 static void enqueue_system_call(
-	struct state *state, struct event *event, struct syscall_spec *syscall)
+    struct state *state, struct event *event, struct syscall_spec *syscall)
 {
 	char *error = NULL;
 	bool done = false;
 
 	/* Wait if there are back-to-back blocking system calls. */
-	if (await_idle_thread(state)) {
+	if (await_idle_thread(state))
+	{
 		asprintf(&error, "blocking system call while another blocking "
-			 "system call is already in progress");
+		         "system call is already in progress");
 		goto error_out;
 	}
 
@@ -1911,17 +2254,20 @@ static void enqueue_system_call(
 		die_perror("pthread_cond_signal");
 
 	/* Wait for the syscall thread to dequeue and start the system call. */
-	while (state->syscalls->state == SYSCALL_ENQUEUED) {
+	while (state->syscalls->state == SYSCALL_ENQUEUED)
+	{
 		DEBUGP("main thread: waiting for dequeued signal; "
 		       "state: %d\n", state->syscalls->state);
 		if (pthread_cond_wait(&state->syscalls->dequeued,
-				      &state->mutex) != 0) {
+		                      &state->mutex) != 0)
+		{
 			die_perror("pthread_cond_wait");
 		}
 	}
 
 	/* Wait for the syscall thread to block or finish the call. */
-	while (!done) {
+	while (!done)
+	{
 		/* Unlock and yield so the system call thread can make
 		 * the system call in a timely fashion.
 		 */
@@ -1952,7 +2298,7 @@ error_out:
 }
 
 void run_system_call_event(
-	struct state *state, struct event *event, struct syscall_spec *syscall)
+    struct state *state, struct event *event, struct syscall_spec *syscall)
 {
 	DEBUGP("%d: system call: %s\n", event->line_number, syscall->name);
 
@@ -1980,15 +2326,18 @@ static void *system_call_thread(void *arg)
 	if (state->syscalls->thread_id < 0)
 		die_perror("gettid");
 
-	while (!done) {
+	while (!done)
+	{
 		DEBUGP("syscall thread: in state %d\n",
 		       state->syscalls->state);
 
-		switch (state->syscalls->state) {
+		switch (state->syscalls->state)
+		{
 		case SYSCALL_IDLE:
 			DEBUGP("syscall thread: waiting\n");
 			if (pthread_cond_wait(&state->syscalls->enqueued,
-					      &state->mutex)) {
+			                      &state->mutex))
+			{
 				die_perror("pthread_cond_wait");
 			}
 			break;
@@ -2021,10 +2370,11 @@ static void *system_call_thread(void *arg)
 			/* Check end time for the blocking system call. */
 			assert(state->syscalls->live_end_usecs >= 0);
 			if (verify_time(state,
-						event->time_type,
-						syscall->end_usecs, 0,
-						state->syscalls->live_end_usecs,
-						"system call return", &error)) {
+			                event->time_type,
+			                syscall->end_usecs, 0,
+			                state->syscalls->live_end_usecs,
+			                "system call return", &error))
+			{
 				die("%s:%d: %s\n",
 				    state->config->script_path,
 				    event->line_number,
@@ -2047,7 +2397,7 @@ static void *system_call_thread(void *arg)
 		case SYSCALL_EXITING:
 			done = true;
 			break;
-		/* omitting default so compiler will catch missing cases */
+			/* omitting default so compiler will catch missing cases */
 		}
 	}
 	DEBUGP("syscall thread: unlocking and exiting\n");
@@ -2063,13 +2413,15 @@ struct syscalls *syscalls_new(struct state *state)
 	syscalls->state = SYSCALL_IDLE;
 
 	if (pthread_create(&syscalls->thread, NULL, system_call_thread,
-			   state) != 0) {
+	                   state) != 0)
+	{
 		die_perror("pthread_create");
 	}
 
 	if ((pthread_cond_init(&syscalls->idle, NULL) != 0) ||
-	    (pthread_cond_init(&syscalls->enqueued, NULL) != 0) ||
-	    (pthread_cond_init(&syscalls->dequeued, NULL) != 0)) {
+	        (pthread_cond_init(&syscalls->enqueued, NULL) != 0) ||
+	        (pthread_cond_init(&syscalls->dequeued, NULL) != 0))
+	{
 		die_perror("pthread_cond_init");
 	}
 
@@ -2079,7 +2431,8 @@ struct syscalls *syscalls_new(struct state *state)
 void syscalls_free(struct state *state, struct syscalls *syscalls)
 {
 	/* Wait a bit for the thread to go idle. */
-	if (await_idle_thread(state)) {
+	if (await_idle_thread(state))
+	{
 		die("%s:%d: runtime error: exiting while "
 		    "a blocking system call is in progress\n",
 		    state->config->script_path,
@@ -2102,8 +2455,9 @@ void syscalls_free(struct state *state, struct syscalls *syscalls)
 	run_lock(state);
 
 	if ((pthread_cond_destroy(&syscalls->idle) != 0) ||
-	    (pthread_cond_destroy(&syscalls->enqueued) != 0) ||
-	    (pthread_cond_destroy(&syscalls->dequeued) != 0)) {
+	        (pthread_cond_destroy(&syscalls->enqueued) != 0) ||
+	        (pthread_cond_destroy(&syscalls->dequeued) != 0))
+	{
 		die_perror("pthread_cond_destroy");
 	}
 

@@ -4,10 +4,31 @@
 #include <assert.h>
 #include <sys/bsdtypes.h>
 #include <sys/socket.h>
+#include <sys/select.h>
+#include <sys/time.h>
+#include "types.h"
+#include "patch_for_ecos.h"
 
+#ifndef MAX
+#define	MAX(a, b) 		((a) < (b) ? (b) : (a))
+#endif
+
+#define	POLLIN		0x0001
+#define	POLLOUT		0x0004
+#define	POLLERR		0x0008
+#define	POLLHUP		0x0010
+#define	POLLNVAL	0x0020
+
+#ifndef howmany
+#define        howmany(x, y)   (((x)+((y)-1))/(y))
+#endif
 
 static int	inet_pton4 (const char *src, uint8_t *dst);
 static int	inet_pton6 (const char *src, uint8_t *dst);
+
+__externC ssize_t  read(int, void *, size_t);
+__externC ssize_t  write(int, const void *, size_t);
+__externC off_t lseek( int fd, off_t pos, int whence );
 
 /*
  *
@@ -40,6 +61,8 @@ static int	inet_pton6 (const char *src, uint8_t *dst);
 
 #define FILE_NAME_LEN_MAX 32
 #define FILE_NAME_PREFIX "/dev/tmp/file"
+
+#define BUF_SIZE 8192
 
 // #define EOVERFLOW   ETOOMANYREFS
 
@@ -221,6 +244,153 @@ static int	inet_pton6 (const char *src, uint8_t *dst);
 // 	fwide(fp, -1);
 // 	return (fp);
 // }
+
+ssize_t
+sendfile_PATCH(int out_fd, int in_fd, off_t *offset, size_t count)
+{
+	off_t orig;
+	char buf[BUF_SIZE];
+	size_t toRead, numRead, numSent, totSent;
+
+	if (offset != NULL)
+	{
+
+		/* Save current file offset and set offset to value in '*offset' */
+
+		orig = lseek(in_fd, 0, SEEK_CUR);
+		if (orig == -1)
+			return -1;
+		if (lseek(in_fd, *offset, SEEK_SET) == -1)
+			return -1;
+	}
+
+	totSent = 0;
+
+	while (count > 0)
+	{
+		toRead = min(BUF_SIZE, count);
+
+		numRead = read(in_fd, buf, toRead);
+		if (numRead == -1)
+			return -1;
+		if (numRead == 0)
+			break;                      /* EOF */
+
+		numSent = write(out_fd, buf, numRead);
+		if (numSent == -1)
+			return -1;
+		if (numSent == 0)               /* Should never happen */
+			printf("write() transferred 0 bytes\n");
+		//fatal("sendfile: write() transferred 0 bytes");
+
+		count -= numSent;
+		totSent += numSent;
+	}
+
+	if (offset != NULL)
+	{
+
+		/* Return updated file offset in '*offset', and reset the file offset
+		   to the value it had when we were called. */
+
+		*offset = lseek(in_fd, 0, SEEK_CUR);
+		if (*offset == -1)
+			return -1;
+		if (lseek(in_fd, orig, SEEK_SET) == -1)
+			return -1;
+	}
+
+	return totSent;
+}
+
+int
+poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+	nfds_t i;
+	int saved_errno, ret, fd, maxfd = 0;
+	fd_set *readfds = NULL, *writefds = NULL, *exceptfds = NULL;
+	size_t nmemb;
+	struct timeval tv, *tvp = NULL;
+
+	for (i = 0; i < nfds; i++)
+	{
+		fd = fds[i].fd;
+		if (fd >= FD_SETSIZE)
+		{
+			errno = EINVAL;
+			return -1;
+		}
+		maxfd = MAX(maxfd, fd);
+	}
+
+	nmemb = howmany(maxfd + 1 , __NFDBITS);
+	if ((readfds = calloc(nmemb, sizeof(fd_mask))) == NULL ||
+	        (writefds = calloc(nmemb, sizeof(fd_mask))) == NULL ||
+	        (exceptfds = calloc(nmemb, sizeof(fd_mask))) == NULL)
+	{
+		saved_errno = ENOMEM;
+		ret = -1;
+		goto out;
+	}
+
+	/* populate event bit vectors for the events we're interested in */
+	for (i = 0; i < nfds; i++)
+	{
+		fd = fds[i].fd;
+		if (fd == -1)
+			continue;
+		if (fds[i].events & POLLIN)
+		{
+			FD_SET(fd, readfds);
+			FD_SET(fd, exceptfds);
+		}
+		if (fds[i].events & POLLOUT)
+		{
+			FD_SET(fd, writefds);
+			FD_SET(fd, exceptfds);
+		}
+	}
+
+	/* poll timeout is msec, select is timeval (sec + usec) */
+	if (timeout >= 0)
+	{
+		tv.tv_sec = timeout / 1000;
+		tv.tv_usec = (timeout % 1000) * 1000;
+		tvp = &tv;
+	}
+
+	ret = select(maxfd + 1, readfds, writefds, exceptfds, tvp);
+	saved_errno = errno;
+
+	/* scan through select results and set poll() flags */
+	for (i = 0; i < nfds; i++)
+	{
+		fd = fds[i].fd;
+		fds[i].revents = 0;
+		if (fd == -1)
+			continue;
+		if (FD_ISSET(fd, readfds))
+		{
+			fds[i].revents |= POLLIN;
+		}
+		if (FD_ISSET(fd, writefds))
+		{
+			fds[i].revents |= POLLOUT;
+		}
+		if (FD_ISSET(fd, exceptfds))
+		{
+			fds[i].revents |= POLLERR;
+		}
+	}
+
+out:
+	free(readfds);
+	free(writefds);
+	free(exceptfds);
+	if (ret == -1)
+		errno = saved_errno;
+	return ret;
+}
 
 
 

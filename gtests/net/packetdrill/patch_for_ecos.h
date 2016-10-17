@@ -1,11 +1,25 @@
 #ifdef ECOS
 
+#ifndef POLL_VAR
+#define POLL_VAR
+typedef unsigned int	nfds_t;
+typedef struct pollfd
+{
+	int 	fd;
+	short	events;
+	short	revents;
+} pollfd_t;
+#endif
+
 int inet_pton (int, const char *, void *);
 const char *inet_ntop (int, const void *, char *, size_t);
 char * strndup(const char *, size_t);
+int poll(struct pollfd *fds, nfds_t nfds, int timeout);
 
 //FILE *open_memstream(char **bufp, size_t *sizep);
 char *get_available_file_name(void);
+
+ssize_t sendfile_PATCH(int out_fd, int in_fd, off_t *offset, size_t count);
 
 #define TUN_PATH                "/dev/tun0"
 #define TUN_DEV                 "tun0"
