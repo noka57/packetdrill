@@ -26,6 +26,10 @@
 
 #include "tcp_options_iterator.h"
 
+
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#endif
 /* See if the given experimental option is a TFO option, and if so
  * then print the TFO option and return STATUS_OK. Otherwise, return
  * STATUS_ERR.
@@ -33,7 +37,7 @@
 static int tcp_fast_open_option_to_string(FILE *s, struct tcp_option *option)
 {
 	if ((option->length < TCPOLEN_EXP_FASTOPEN_BASE) ||
-	    (ntohs(option->data.fast_open.magic) != TCPOPT_FASTOPEN_MAGIC))
+	        (ntohs(option->data.fast_open.magic) != TCPOPT_FASTOPEN_MAGIC))
 		return STATUS_ERR;
 
 	fprintf(s, "FO ");
@@ -47,22 +51,29 @@ static int tcp_fast_open_option_to_string(FILE *s, struct tcp_option *option)
 }
 
 int tcp_options_to_string(struct packet *packet,
-				  char **ascii_string, char **error)
+                          char **ascii_string, char **error)
 {
 	int result = STATUS_ERR;	/* return value */
+#ifdef ECOS
+	FILE *s = fopen(get_available_file_name(), "w+");
+	assert(s != NULL);
+#else
 	size_t size = 0;
 	FILE *s = open_memstream(ascii_string, &size);  /* output string */
+#endif
 
 	int index = 0;	/* number of options seen so far */
 
 	struct tcp_options_iterator iter;
 	struct tcp_option *option = NULL;
 	for (option = tcp_options_begin(packet, &iter);
-	     option != NULL; option = tcp_options_next(&iter, error)) {
+	        option != NULL; option = tcp_options_next(&iter, error))
+	{
 		if (index > 0)
 			fputc(',', s);
 
-		switch (option->kind) {
+		switch (option->kind)
+		{
 		case TCPOPT_EOL:
 			fputs("eol", s);
 			break;
@@ -77,7 +88,7 @@ int tcp_options_to_string(struct packet *packet,
 
 		case TCPOPT_WINDOW:
 			fprintf(s, "wscale %u",
-				option->data.window_scale.shift_count);
+			        option->data.window_scale.shift_count);
 			break;
 
 		case TCPOPT_SACK_PERMITTED:
@@ -88,36 +99,53 @@ int tcp_options_to_string(struct packet *packet,
 			fprintf(s, "sack ");
 			int num_blocks = 0;
 			if (num_sack_blocks(option->length,
-						    &num_blocks, error))
+			                    &num_blocks, error))
 				goto out;
 			int i = 0;
-			for (i = 0; i < num_blocks; ++i) {
+			for (i = 0; i < num_blocks; ++i)
+			{
 				if (i > 0)
 					fputc(' ', s);
 				fprintf(s, "%u:%u",
-					ntohl(option->data.sack.block[i].left),
-					ntohl(option->data.sack.block[i].right));
+				        ntohl(option->data.sack.block[i].left),
+				        ntohl(option->data.sack.block[i].right));
 			}
 			break;
 
 		case TCPOPT_TIMESTAMP:
 			fprintf(s, "TS val %u ecr %u",
-				ntohl(option->data.time_stamp.val),
-				ntohl(option->data.time_stamp.ecr));
+			        ntohl(option->data.time_stamp.val),
+			        ntohl(option->data.time_stamp.ecr));
 			break;
 
 		case TCPOPT_EXP:
-			if (tcp_fast_open_option_to_string(s, option)) {
+			if (tcp_fast_open_option_to_string(s, option))
+			{
+#ifdef ECOS
+				int len = strlen("unknown experimental option");
+				*error = malloc(len);
+				snprintf(*error, len, "unknown experimental option");
+#else
 				asprintf(error,
-					 "unknown experimental option");
+				         "unknown experimental option");
+#endif
 				goto out;
 			}
 			break;
 
 		default:
+		{
+#ifdef ECOS
+			int len = strlen("unexpected TCP option kind: ") + 8;
+			*error = malloc(len);
+			snprintf(*error, len, "unexpected TCP option kind: %u",
+			         option->kind);
+#else
 			asprintf(error, "unexpected TCP option kind: %u",
-				 option->kind);
-			goto out;
+			         option->kind);
+#endif
+		}
+		goto out;
 		}
 		++index;
 	}
