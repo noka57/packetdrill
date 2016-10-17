@@ -13,12 +13,6 @@
 #define	MAX(a, b) 		((a) < (b) ? (b) : (a))
 #endif
 
-#define	POLLIN		0x0001
-#define	POLLOUT		0x0004
-#define	POLLERR		0x0008
-#define	POLLHUP		0x0010
-#define	POLLNVAL	0x0020
-
 #ifndef howmany
 #define        howmany(x, y)   (((x)+((y)-1))/(y))
 #endif

@@ -25,17 +25,22 @@
 #include "script.h"
 
 #include <assert.h>
-#include <poll.h>
 #include <stdlib.h>
-
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#else
+#include <poll.h>
+#endif
 #include "symbols.h"
+
+
 
 /* Fill in a value representing the given expression in
  * fully-evaluated form (e.g. symbols resolved to ints). On success,
  * returns STATUS_OK. On error return STATUS_ERR and fill in *error.
  */
 static int evaluate(struct expression *in,
-		    struct expression **out_ptr, char **error);
+                    struct expression **out_ptr, char **error);
 
 /* Initialize script object */
 void init_script(struct script *script)
@@ -47,11 +52,13 @@ void init_script(struct script *script)
 }
 
 /* This table maps expression types to human-readable strings */
-struct expression_type_entry {
+struct expression_type_entry
+{
 	enum expression_t type;
 	const char *name;
 };
-struct expression_type_entry expression_type_table[] = {
+struct expression_type_entry expression_type_table[] =
+{
 	{ EXPR_NONE,                 "none" },
 	{ EXPR_ELLIPSIS,             "ellipsis" },
 	{ EXPR_INTEGER,              "integer" },
@@ -79,7 +86,8 @@ const char *expression_type_to_string(enum expression_t type)
 }
 
 /* Cross-platform symbols. */
-struct int_symbol cross_platform_symbols[] = {
+struct int_symbol cross_platform_symbols[] =
+{
 	{ AF_INET,                          "AF_INET"                         },
 	{ AF_INET6,                         "AF_INET6"                        },
 
@@ -107,11 +115,13 @@ struct int_symbol cross_platform_symbols[] = {
 
 /* Do a symbol->int lookup, and return true iff we found the symbol. */
 static bool lookup_int_symbol(const char *input_symbol, s64 *output_integer,
-			      struct int_symbol *symbols)
+                              struct int_symbol *symbols)
 {
 	int i;
-	for (i = 0; symbols[i].name != NULL ; ++i) {
-		if (strcmp(input_symbol, symbols[i].name) == 0) {
+	for (i = 0; symbols[i].name != NULL ; ++i)
+	{
+		if (strcmp(input_symbol, symbols[i].name) == 0)
+		{
 			*output_integer = symbols[i].value;
 			return true;
 		}
@@ -120,22 +130,31 @@ static bool lookup_int_symbol(const char *input_symbol, s64 *output_integer,
 }
 
 int symbol_to_int(const char *input_symbol, s64 *output_integer,
-		  char **error)
+                  char **error)
 {
 	if (lookup_int_symbol(input_symbol, output_integer,
-			      cross_platform_symbols))
+	                      cross_platform_symbols))
 		return STATUS_OK;
 
 	if (lookup_int_symbol(input_symbol, output_integer,
-			      platform_symbols()))
+	                      platform_symbols()))
 		return STATUS_OK;
 
-	asprintf(error, "unknown symbol: '%s'", input_symbol);
+	{
+#ifdef ECOS
+		int len = strlen("unknown symbol: ''") + strlen(input_symbol);
+		*error = malloc(len);
+		snprintf(*error, len, "unknown symbol: '%s'", input_symbol);
+#else
+		asprintf(error, "unknown symbol: '%s'", input_symbol);
+#endif
+	}
 	return STATUS_ERR;
 }
 
 /* Names for the events and revents bit mask flags for poll() system call */
-struct flag_name poll_flags[] = {
+struct flag_name poll_flags[] =
+{
 
 	{ POLLIN,	"POLLIN" },
 	{ POLLPRI,	"POLLPRI" },
@@ -194,13 +213,26 @@ char *flags_to_string(struct flag_name *flags_array, u64 flags)
 	int i = 0;
 	char *out = strdup("");
 
-	for (i = 0; i < 64; ++i) {
-		if (flags & bit_mask) {
+	for (i = 0; i < 64; ++i)
+	{
+		if (flags & bit_mask)
+		{
 			char *tmp = NULL;
-			asprintf(&tmp, "%s%s%s",
-				 out,
-				 out[0] ? "|" : "",
-				 flag_name(flags_array, bit_mask));
+			{
+#ifdef ECOS
+				int len = strlen(out) + strlen(flag_name(flags_array, bit_mask)) + 1;
+				tmp = malloc(len);
+				snprintf(tmp, len, "%s%s%s",
+				         out,
+				         out[0] ? "|" : "",
+				         flag_name(flags_array, bit_mask));
+#else
+				asprintf(&tmp, "%s%s%s",
+				         out,
+				         out[0] ? "|" : "",
+				         flag_name(flags_array, bit_mask));
+#endif
+			}
 			free(out);
 			out = tmp;
 		}
@@ -214,17 +246,20 @@ char *flags_to_string(struct flag_name *flags_array, u64 flags)
  * an error message in *error.
  */
 static int unescape_cstring_expression(const char *input_string,
-				       struct expression *out, char **error)
+                                       struct expression *out, char **error)
 {
 	int bytes = strlen(input_string);
 	out->type = EXPR_STRING;
 	out->value.string = (char *)calloc(1, bytes + 1);
 	const char *c_in = input_string;
 	char *c_out = out->value.string;
-	while (*c_in != '\0') {
-		if (*c_in == '\\') {
+	while (*c_in != '\0')
+	{
+		if (*c_in == '\\')
+		{
 			++c_in;
-			switch (*c_in) {
+			switch (*c_in)
+			{
 			case '\\':
 				*c_out = '\\';
 			case '"':
@@ -245,11 +280,22 @@ static int unescape_cstring_expression(const char *input_string,
 				*c_out = '\v';
 				break;
 			default:
+			{
+#ifdef ECOS
+				int len = strlen("unsupported escape code: ''") + 1;
+				*error = malloc(len);
+				snprintf(*error, len, "unsupported escape code: '%c'",
+				         *c_in);
+#else
 				asprintf(error, "unsupported escape code: '%c'",
-					 *c_in);
+				         *c_in);
+#endif
 				return STATUS_ERR;
 			}
-		} else {
+			}
+		}
+		else
+		{
 			*c_out = *c_in;
 		}
 		++c_in;
@@ -263,9 +309,10 @@ void free_expression(struct expression *expression)
 	if (expression == NULL)
 		return;
 	if ((expression->type <= EXPR_NONE) ||
-	    (expression->type >= NUM_EXPR_TYPES))
+	        (expression->type >= NUM_EXPR_TYPES))
 		assert(!"bad expression type");
-	switch (expression->type) {
+	switch (expression->type)
+	{
 	case EXPR_ELLIPSIS:
 	case EXPR_INTEGER:
 	case EXPR_LINGER:
@@ -318,7 +365,7 @@ void free_expression(struct expression *expression)
 	case EXPR_NONE:
 	case NUM_EXPR_TYPES:
 		break;
-	/* missing default case so compiler catches missing cases */
+		/* missing default case so compiler catches missing cases */
 	}
 	memset(expression, 0, sizeof(*expression));  /* paranoia */
 	free(expression);
@@ -326,7 +373,8 @@ void free_expression(struct expression *expression)
 
 void free_expression_list(struct expression_list *list)
 {
-	while (list != NULL) {
+	while (list != NULL)
+	{
 		free_expression(list->expression);
 		struct expression_list *dead = list;
 		list = list->next;
@@ -335,7 +383,7 @@ void free_expression_list(struct expression_list *list)
 }
 
 static int evaluate_binary_expression(struct expression *in,
-				      struct expression *out, char **error)
+                                      struct expression *out, char **error)
 {
 	int result = STATUS_ERR;
 	assert(in->type == EXPR_BINARY);
@@ -348,18 +396,45 @@ static int evaluate_binary_expression(struct expression *in,
 		goto error_out;
 	if (evaluate(in->value.binary->rhs, &rhs, error))
 		goto error_out;
-	if (strcmp("|", in->value.binary->op) == 0) {
-		if (lhs->type != EXPR_INTEGER) {
+	if (strcmp("|", in->value.binary->op) == 0)
+	{
+		if (lhs->type != EXPR_INTEGER)
+		{
+#ifdef ECOS
+			int len = strlen("left hand side of | not an integer");
+			*error = malloc(len);
+			snprintf(*error, len, "left hand side of | not an integer");
+#else
 			asprintf(error, "left hand side of | not an integer");
-		} else if (rhs->type != EXPR_INTEGER) {
+#endif
+		}
+		else if (rhs->type != EXPR_INTEGER)
+		{
+#ifdef ECOS
+			int len = strlen("right hand side of | not an integer");
+			*error = malloc(len);
+			snprintf(*error, len, "right hand side of | not an integer");
+#else
 			asprintf(error, "right hand side of | not an integer");
-		} else {
+#endif
+		}
+		else
+		{
 			out->value.num = lhs->value.num | rhs->value.num;
 			result = STATUS_OK;
 		}
-	} else {
+	}
+	else
+	{
+#ifdef ECOS
+		int len = strlen("bad binary operator ''") + strlen(in->value.binary->op);
+		*error = malloc(len);
+		snprintf(*error, len, "bad binary operator '%s'",
+		         in->value.binary->op);
+#else
 		asprintf(error, "bad binary operator '%s'",
-			 in->value.binary->op);
+		         in->value.binary->op);
+#endif
 	}
 error_out:
 	free_expression(rhs);
@@ -368,18 +443,18 @@ error_out:
 }
 
 static int evaluate_list_expression(struct expression *in,
-				    struct expression *out, char **error)
+                                    struct expression *out, char **error)
 {
 	assert(in->type == EXPR_LIST);
 	assert(out->type == EXPR_LIST);
 
 	out->value.list = NULL;
 	return evaluate_expression_list(in->value.list,
-					&out->value.list, error);
+	                                &out->value.list, error);
 }
 
 static int evaluate_iovec_expression(struct expression *in,
-				     struct expression *out, char **error)
+                                     struct expression *out, char **error)
 {
 	struct iovec_expr *in_iov;
 	struct iovec_expr *out_iov;
@@ -402,7 +477,7 @@ static int evaluate_iovec_expression(struct expression *in,
 }
 
 static int evaluate_msghdr_expression(struct expression *in,
-				      struct expression *out, char **error)
+                                      struct expression *out, char **error)
 {
 	struct msghdr_expr *in_msg;
 	struct msghdr_expr *out_msg;
@@ -431,7 +506,7 @@ static int evaluate_msghdr_expression(struct expression *in,
 }
 
 static int evaluate_pollfd_expression(struct expression *in,
-				      struct expression *out, char **error)
+                                      struct expression *out, char **error)
 {
 	struct pollfd_expr *in_pollfd;
 	struct pollfd_expr *out_pollfd;
@@ -456,7 +531,7 @@ static int evaluate_pollfd_expression(struct expression *in,
 }
 
 static int evaluate(struct expression *in,
-		    struct expression **out_ptr, char **error)
+                    struct expression **out_ptr, char **error)
 {
 	int result = STATUS_OK;
 	struct expression *out = calloc(1, sizeof(struct expression));
@@ -464,11 +539,19 @@ static int evaluate(struct expression *in,
 	out->type = in->type;	/* most types of expression stay the same */
 
 	if ((in->type <= EXPR_NONE) ||
-	    (in->type >= NUM_EXPR_TYPES)) {
+	        (in->type >= NUM_EXPR_TYPES))
+	{
+#ifdef ECOS
+		int len = strlen("bad expression type: ") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "bad expression type: %d", in->type);
+#else
 		asprintf(error, "bad expression type: %d", in->type);
+#endif
 		return STATUS_ERR;
 	}
-	switch (in->type) {
+	switch (in->type)
+	{
 	case EXPR_ELLIPSIS:
 		break;
 	case EXPR_INTEGER:		/* copy as-is */
@@ -481,7 +564,7 @@ static int evaluate(struct expression *in,
 	case EXPR_WORD:
 		out->type = EXPR_INTEGER;
 		if (symbol_to_int(in->value.string,
-				  &out->value.num, error))
+		                  &out->value.num, error))
 			return STATUS_ERR;
 		break;
 	case EXPR_STRING:
@@ -490,14 +573,14 @@ static int evaluate(struct expression *in,
 		break;
 	case EXPR_SOCKET_ADDRESS_IPV4:	/* copy as-is */
 		out->value.socket_address_ipv4 =
-			malloc(sizeof(struct sockaddr_in));
+		    malloc(sizeof(struct sockaddr_in));
 		memcpy(out->value.socket_address_ipv4,
 		       in->value.socket_address_ipv4,
 		       sizeof(*(out->value.socket_address_ipv4)));
 		break;
 	case EXPR_SOCKET_ADDRESS_IPV6:	/* copy as-is */
 		out->value.socket_address_ipv6 =
-			malloc(sizeof(struct sockaddr_in6));
+		    malloc(sizeof(struct sockaddr_in6));
 		memcpy(out->value.socket_address_ipv6,
 		       in->value.socket_address_ipv6,
 		       sizeof(*(out->value.socket_address_ipv6)));
@@ -520,7 +603,7 @@ static int evaluate(struct expression *in,
 	case EXPR_NONE:
 	case NUM_EXPR_TYPES:
 		break;
-	/* missing default case so compiler catches missing cases */
+		/* missing default case so compiler catches missing cases */
 	}
 
 	return result;
@@ -531,16 +614,18 @@ static int evaluate(struct expression *in,
  * and fill in *error.
  */
 int evaluate_expression_list(struct expression_list *in_list,
-			     struct expression_list **out_list,
-			     char **error)
+                             struct expression_list **out_list,
+                             char **error)
 {
 	struct expression_list **node_ptr = out_list;
-	while (in_list != NULL) {
+	while (in_list != NULL)
+	{
 		struct expression_list *node =
-			calloc(1, sizeof(struct expression_list));
+		    calloc(1, sizeof(struct expression_list));
 		*node_ptr = node;
 		if (evaluate(in_list->expression,
-			     &node->expression, error)) {
+		             &node->expression, error))
+		{
 			free_expression_list(*out_list);
 			*out_list = NULL;
 			return STATUS_ERR;
