@@ -23,16 +23,28 @@
  */
 
 #include "types.h"
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#endif
 
 struct in_addr in4addr_any    = { .s_addr = INADDR_ANY };
 
 void hex_dump(const u8 *buffer, int bytes, char **hex)
 {
+
+#ifdef ECOS
+	FILE *s = fopen(get_available_file_name(), "w+");
+	assert(s != NULL);
+#else
 	size_t size = 0;
 	FILE *s = open_memstream(hex, &size);  /* output string */
+#endif
+
 	int i;
-	for (i = 0; i < bytes; ++i) {
-		if (i % 16 == 0) {
+	for (i = 0; i < bytes; ++i)
+	{
+		if (i % 16 == 0)
+		{
 			if (i > 0)
 				fprintf(s, "\n");
 			fprintf(s, "0x%04x: ", i);      /* show buffer offset */

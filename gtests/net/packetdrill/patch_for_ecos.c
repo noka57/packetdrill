@@ -404,7 +404,7 @@ char *get_available_file_name(void)
 {
 	static int file_index = 0;
 	static char file_name[FILE_NAME_LEN_MAX] = {0};
-
+	memset(file_name, 0, FILE_NAME_LEN_MAX);
 	snprintf(file_name, (int)(3 + strlen(FILE_NAME_PREFIX)), "%s%d", FILE_NAME_PREFIX, file_index++);
 	return file_name;
 }
