@@ -42,7 +42,7 @@ struct tcp_option *tcp_option_new(u8 kind, u8 length)
 }
 
 int tcp_options_append(struct tcp_options *options,
-			       struct tcp_option *option)
+                       struct tcp_option *option)
 {
 	if (options->length + option->length > sizeof(options->data))
 		return STATUS_ERR;
@@ -54,14 +54,28 @@ int tcp_options_append(struct tcp_options *options,
 
 int num_sack_blocks(u8 opt_len, int *num_blocks, char **error)
 {
-	if (opt_len <= 2) {
+	if (opt_len <= 2)
+	{
+#ifdef ECOS
+		int len = strlen("TCP SACK option too short");
+		*error = malloc(len);
+		snprintf(*error, len, "TCP SACK option too short");
+#else
 		asprintf(error, "TCP SACK option too short");
+#endif
 		return STATUS_ERR;
 	}
 	const int num_bytes = opt_len - 2;
-	if (num_bytes % sizeof(struct sack_block) != 0) {
+	if (num_bytes % sizeof(struct sack_block) != 0)
+	{
+#ifdef ECOS
+		int len = strlen("TCP SACK option not a multiple of SACK block size");
+		*error = malloc(len);
+		snprintf(*error, len, "TCP SACK option not a multiple of SACK block size");
+#else
 		asprintf(error,
-			 "TCP SACK option not a multiple of SACK block size");
+		         "TCP SACK option not a multiple of SACK block size");
+#endif
 		return STATUS_ERR;
 	}
 	*num_blocks = num_bytes / sizeof(struct sack_block);
