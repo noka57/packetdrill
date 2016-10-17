@@ -37,9 +37,10 @@
  * error message.
  */
 static int get_expected_tcp_option_length(u8 kind, u8 *expected_length,
-					  char **error)
+                                          char **error)
 {
-	switch (kind) {
+	switch (kind)
+	{
 	case TCPOPT_EOL:
 	case TCPOPT_NOP:
 		*expected_length = 1;  /* no length byte or data */
@@ -67,8 +68,16 @@ static int get_expected_tcp_option_length(u8 kind, u8 *expected_length,
 		break;
 
 	default:
+	{
+#ifdef ECOS
+		int len = strlen("unexpected TCP option kind: ") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "unexpected TCP option kind: %u", kind);
+#else
 		asprintf(error, "unexpected TCP option kind: %u", kind);
+#endif
 		return STATUS_ERR;
+	}
 	}
 	return STATUS_OK;
 }
@@ -80,27 +89,56 @@ static int get_expected_tcp_option_length(u8 kind, u8 *expected_length,
  * failure returns STATUS_ERR and sets error message.
  */
 static int get_tcp_option_length(const u8 *option, const u8 *end,
-				 u8 expected_length, u8 *length, char **error)
+                                 u8 expected_length, u8 *length, char **error)
 {
 	int result = STATUS_ERR;
-	if (option + 1 >= end) {
+	if (option + 1 >= end)
+	{
+#ifdef ECOS
+		int len = strlen("TCP option length byte extends too far");
+		*error = malloc(len);
+		snprintf(*error, len, "TCP option length byte extends too far");
+#else
 		asprintf(error, "TCP option length byte extends too far");
+#endif
 		goto out;
 	}
 	*length = *(option + 1);
-	if (*length < 2) {
+	if (*length < 2)
+	{
+#ifdef ECOS
+		int len = strlen("TCP option with length byte is too short");
+		*error = malloc(len);
+		snprintf(*error, len, "TCP option with length byte is too short");
+#else
 		asprintf(error, "TCP option with length byte is too short");
+#endif
 		goto out;
 	}
 
-	if (option + (*length) > end) {
+	if (option + (*length) > end)
+	{
+#ifdef ECOS
+		int len = strlen("TCP option data extends too far");
+		*error = malloc(len);
+		snprintf(*error, len, "TCP option data extends too far");
+#else
 		asprintf(error, "TCP option data extends too far");
+#endif
 		goto out;
 	}
-	if (expected_length && (*length != expected_length)) {
+	if (expected_length && (*length != expected_length))
+	{
+#ifdef ECOS
+		int len = strlen("bad TCP option length: was  but expected ");
+		*error = malloc(len);
+		snprintf(*error, len, "bad TCP option length: was %u but expected %u",
+		         *length, expected_length);
+#else
 		asprintf(error,
-			 "bad TCP option length: was %u but expected %u",
-			 *length, expected_length);
+		         "bad TCP option length: was %u but expected %u",
+		         *length, expected_length);
+#endif
 		goto out;
 	}
 	result = STATUS_OK;
@@ -110,7 +148,7 @@ out:
 }
 
 static struct tcp_option *get_current_option(
-	struct tcp_options_iterator *iter)
+    struct tcp_options_iterator *iter)
 {
 	assert(iter->current_option <= iter->options_end);
 	if (iter->current_option >= iter->options_end)
@@ -119,8 +157,8 @@ static struct tcp_option *get_current_option(
 }
 
 struct tcp_option *tcp_options_begin(
-	struct packet *packet,
-	struct tcp_options_iterator *iter)
+    struct packet *packet,
+    struct tcp_options_iterator *iter)
 {
 	memset(iter, 0, sizeof(*iter));
 	iter->current_option	= packet_tcp_options(packet);
@@ -129,7 +167,7 @@ struct tcp_option *tcp_options_begin(
 }
 
 struct tcp_option *tcp_options_next(
-	struct tcp_options_iterator *iter, char **error)
+    struct tcp_options_iterator *iter, char **error)
 {
 	/* Ensure we haven't hit the end. */
 	assert(iter->current_option < iter->options_end);
@@ -140,18 +178,21 @@ struct tcp_option *tcp_options_next(
 	u8 expected_length = 0;		/* expected length for this kind */
 	struct tcp_option *option = (struct tcp_option *)iter->current_option;
 	if (get_expected_tcp_option_length(
-		    option->kind, &expected_length, error))
+	            option->kind, &expected_length, error))
 		goto out;
 
 	/* Calculate and validate the actual length of the option. */
-	if (expected_length == 1) {
+	if (expected_length == 1)
+	{
 		/* 1 byte length means no length byte, so real length is 1. */
 		length = 1;
-	} else {
+	}
+	else
+	{
 		/* Parse and validate length byte. */
 		if (get_tcp_option_length(iter->current_option,
-					  iter->options_end,
-					  expected_length, &length, error))
+		                          iter->options_end,
+		                          expected_length, &length, error))
 			goto out;
 	}
 
