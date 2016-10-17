@@ -34,18 +34,41 @@
 int safe_system(const char *command, char **error)
 {
 	int status = system(command);
-	if (status == -1) {
+	if (status == -1)
+	{
+#ifdef ECOS
+		int len = strlen(strerror(errno));
+		*error = malloc(len);
+		snprintf(*error, len, "%s", strerror(errno));
+#else
 		asprintf(error, "%s", strerror(errno));
+#endif
 		return STATUS_ERR;
 	}
 	if (WIFSIGNALED(status) &&
-	    (WTERMSIG(status) == SIGINT || WTERMSIG(status) == SIGQUIT)) {
+	        (WTERMSIG(status) == SIGINT || WTERMSIG(status) == SIGQUIT))
+	{
+#ifdef ECOS
+		int len = strlen("got signal ") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "got signal %d",
+		         WTERMSIG(status));
+#else
 		asprintf(error, "got signal %d (%s)",
-			 WTERMSIG(status), strsignal(WTERMSIG(status)));
+		         WTERMSIG(status), strsignal(WTERMSIG(status)));
+#endif
 		return STATUS_ERR;
 	}
-	if (WEXITSTATUS(status) != 0) {
+	if (WEXITSTATUS(status) != 0)
+	{
+
+#ifdef ECOS
+		int len = strlen("non-zero status ") + 8;
+		*error = malloc(len);
+		snprintf(*error, len, "non-zero status %d", WEXITSTATUS(status));
+#else
 		asprintf(error, "non-zero status %d", WEXITSTATUS(status));
+#endif
 		return STATUS_ERR;
 	}
 	return STATUS_OK;
