@@ -54,6 +54,9 @@
  * can first include all of the declarations on which it depends.
  */
 #include "parser.h"
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#endif
 
 /* Suppress flex's generation of an uncalled static input() function, which
  * leads to a compiler warning:

@@ -9,7 +9,7 @@ parser.o: parser.y
 
 lexer.o: lexer.l parser.o
 	flex -olexer.c lexer.l
-	$(CC) -O2 -g -Wall -c lexer.c
+	$(CC) -O2 $(CFLAGS) -c lexer.c
 
 packetdrill-lib := \
          checksum.o code.o config.o hash.o hash_map.o patch_for_ecos.o ip_address.o ip_prefix.o \
