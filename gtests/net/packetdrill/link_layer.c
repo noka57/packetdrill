@@ -66,7 +66,7 @@ void get_hw_address(const char *name, struct ether_addr *hw_address)
 
 #else
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(ECOS)
 #include <net/if_types.h>
 #include <net/if_dl.h>
 #include <sys/types.h>
@@ -83,12 +83,15 @@ void get_hw_address(const char *name, struct ether_addr *hw_address)
 	if (getifaddrs(&ifaddrs_list) < 0)
 		die_perror("getifaddrs");
 
-	for (ifaddr = ifaddrs_list; ifaddr != NULL; ifaddr = ifaddr->ifa_next) {
+	for (ifaddr = ifaddrs_list; ifaddr != NULL; ifaddr = ifaddr->ifa_next)
+	{
 		if (strcmp(name, ifaddr->ifa_name) == 0 &&
-		    ifaddr->ifa_addr->sa_family == AF_LINK) {
+		        ifaddr->ifa_addr->sa_family == AF_LINK)
+		{
 			struct sockaddr_dl *sdl;
 			sdl = (struct sockaddr_dl *)ifaddr->ifa_addr;
-			if (sdl->sdl_type == IFT_ETHER) {
+			if (sdl->sdl_type == IFT_ETHER)
+			{
 				memcpy(hw_address, LLADDR(sdl),
 				       sizeof(*hw_address));
 				freeifaddrs(ifaddrs_list);
