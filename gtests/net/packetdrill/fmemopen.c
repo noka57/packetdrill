@@ -33,7 +33,9 @@
 
 #if !defined(HAVE_FMEMOPEN)
 
-struct fmemopen_read_state {
+#ifndef ECOS
+struct fmemopen_read_state
+{
 	char *next;	/* the next byte to return */
 	char *end;	/* the byte after the end of the string */
 };
@@ -41,7 +43,7 @@ struct fmemopen_read_state {
 static int fmemopen_readfn(void *cookie, char *buf, int len)
 {
 	struct fmemopen_read_state *read_cookie =
-		(struct fmemopen_read_state *)cookie;
+	    (struct fmemopen_read_state *)cookie;
 	int bytes = 0;
 
 	assert(read_cookie->next <= read_cookie->end);
@@ -70,12 +72,14 @@ FILE *fmemopen(char *str, size_t size, const char *mode)
 	read_cookie->end  = str + size;
 
 	f = fropen(read_cookie, fmemopen_readfn);
-	if (!f) {
+	if (!f)
+	{
 		free(read_cookie);
 		return NULL;
 	}
 
 	return f;
 }
+#endif
 
 #endif /* HAVE_FMEMOPEN */

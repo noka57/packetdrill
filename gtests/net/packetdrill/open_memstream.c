@@ -27,6 +27,8 @@
 
 #ifndef HAVE_OPEN_MEMSTREAM
 
+#ifndef ECOS
+
 #include "open_memstream.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -35,7 +37,8 @@
 #include <assert.h>
 
 /* Our internal state for the memstream. */
-struct mem_stream {
+struct mem_stream
+{
 	char   **buf;		/* pointer to the output buffer pointer */
 	size_t  *sizeloc;	/* pointer to the output final buffer size */
 
@@ -115,7 +118,8 @@ FILE *open_memstream(char **ptr, size_t *sizeloc)
 	FILE *f;
 	struct mem_stream *stream;
 
-	if (ptr == NULL || sizeloc == NULL) {
+	if (ptr == NULL || sizeloc == NULL)
+	{
 		errno = EINVAL;
 		return NULL;
 	}
@@ -125,7 +129,8 @@ FILE *open_memstream(char **ptr, size_t *sizeloc)
 		return NULL;
 
 	f = funopen(stream, NULL, write_memstream, NULL, close_memstream);
-	if (f == NULL) {
+	if (f == NULL)
+	{
 		free(stream);
 		return NULL;
 	}
@@ -138,5 +143,7 @@ FILE *open_memstream(char **ptr, size_t *sizeloc)
 
 	return f;
 }
+
+#endif
 
 #endif /* HAVE_OPEN_MEMSTREAM */
