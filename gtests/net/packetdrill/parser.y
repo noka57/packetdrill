@@ -104,6 +104,10 @@
 #include "tcp.h"
 #include "tcp_options.h"
 
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#endif
+
 /* This include of the bison-generated .h file must go last so that we
  * can first include all of the declarations on which it depends.
  */
@@ -237,9 +241,27 @@ int parse_script(const struct config *config,
 #endif
 
 	/* Now parse the script from our buffer. */
+#ifdef ECOS
+	{
+		if (script->length == 0)
+		{
+			errno = EINVAL;
+			yyin = NULL;
+		}
+		else
+		{
+			yyin = fopen(get_available_file_name(), "r");
+		}
+	}
+#else
 	yyin = fmemopen(script->buffer, script->length, "r");
+#endif
 	if (yyin == NULL)
 		die_perror("fmemopen: parse error opening script buffer");
+
+#ifdef ECOS
+ 	fprintf(yyin, "%s", script->buffer);
+#endif
 
 	current_script_path = config->script_path;
 	in_config = config;
@@ -393,17 +415,31 @@ static struct tcp_option *new_tcp_fast_open_option(const char *cookie_string,
 						    char **error)
 {
 	int cookie_string_len = strlen(cookie_string);
-	if (cookie_string_len & 1) {
+	if (cookie_string_len & 1) 
+	{
+#ifdef ECOS
+	int len = strlen("TCP fast open cookie has an odd number of digits");
+	*error = malloc(len);
+	snprintf(*error, len, "TCP fast open cookie has an odd number of digits");
+#else
 		asprintf(error,
 			 "TCP fast open cookie has an odd number of digits");
+#endif
 		return NULL;
 	}
 	int cookie_bytes = cookie_string_len / 2;  /* 2 hex chars per byte */
-	if (cookie_bytes > MAX_TCP_FAST_OPEN_COOKIE_BYTES) {
+	if (cookie_bytes > MAX_TCP_FAST_OPEN_COOKIE_BYTES) 
+	{
+#ifdef ECOS
+	int len = strlen("TCP fast open cookie too long. TCP fast open cookie of  bytes exceeds maximum cookie length of  bytes") + 16;
+	*error = malloc(len);
+	snprintf(*error, len, "TCP fast open cookie too long. TCP fast open cookie of %d bytes exceeds maximum cookie length of %d bytes", cookie_bytes, MAX_TCP_FAST_OPEN_COOKIE_BYTES);
+#else
 		asprintf(error, "TCP fast open cookie too long");
 		asprintf(error, "TCP fast open cookie of %d bytes "
 			 "exceeds maximum cookie length of %d bytes",
 			 cookie_bytes, MAX_TCP_FAST_OPEN_COOKIE_BYTES);
+#endif
 		return NULL;
 	}
 	u8 option_bytes = TCPOLEN_EXP_FASTOPEN_BASE + cookie_bytes;
@@ -420,8 +456,14 @@ static struct tcp_option *new_tcp_fast_open_option(const char *cookie_string,
 			     sizeof(option->data.fast_open.cookie),
 			     &parsed_bytes)) {
 		free(option);
+#ifdef ECOS
+	int len = strlen("TCP fast open cookie is not a valid hex string");
+	*error = malloc(len);
+	snprintf(*error, len, "TCP fast open cookie is not a valid hex string");
+#else
 		asprintf(error,
 			 "TCP fast open cookie is not a valid hex string");
+#endif
 		return NULL;
 	}
 	assert(parsed_bytes == cookie_bytes);
@@ -881,7 +923,15 @@ ip_ecn
 flags
 : WORD         { $$ = $1; }
 | '.'          { $$ = strdup("."); }
-| WORD '.'     { asprintf(&($$), "%s.", $1); free($1); }
+| WORD '.'     { 
+#ifdef ECOS 
+int len = strlen($1);
+($$) = malloc(len);
+snprintf(($$), len, $1);
+#else 
+asprintf(&($$), "%s.", $1);
+#endif 
+free($1); }
 | '-'          { $$ = strdup(""); }  /* no TCP flags set in segment */
 ;
 
@@ -1166,7 +1216,12 @@ sockaddr
 		memset(ipv4, 0, sizeof(*ipv4));
 		ipv4->sin_family = AF_INET;
 		ipv4->sin_port = htons($10);
-		if (inet_pton(AF_INET, $17, &ipv4->sin_addr) == 1) {
+#ifdef ECOS
+		if (inet_pton_PATCH(AF_INET, $17, &ipv4->sin_addr) == 1) 
+#else
+		if (inet_pton(AF_INET, $17, &ipv4->sin_addr) == 1) 
+#endif
+		{
 			$$ = new_expression(EXPR_SOCKET_ADDRESS_IPV4);
 			$$->value.socket_address_ipv4 = ipv4;
 		} else {
@@ -1178,7 +1233,12 @@ sockaddr
 		memset(ipv6, 0, sizeof(*ipv6));
 		ipv6->sin6_family = AF_INET6;
 		ipv6->sin6_port = htons($10);
-		if (inet_pton(AF_INET6, $17, &ipv6->sin6_addr) == 1) {
+#ifdef ECOS
+		if (inet_pton_PATCH(AF_INET6, $17, &ipv6->sin6_addr) == 1) 
+#else
+		if (inet_pton(AF_INET6, $17, &ipv6->sin6_addr) == 1) 
+#endif
+		{
 			$$ = new_expression(EXPR_SOCKET_ADDRESS_IPV6);
 			$$->value.socket_address_ipv6 = ipv6;
 		} else {
@@ -1259,7 +1319,15 @@ note
 
 word_list
 : WORD              { $$ = $1; }
-| word_list WORD    { asprintf(&($$), "%s %s", $1, $2); free($1); free($2); }
+| word_list WORD    { 
+#ifdef ECOS
+	int len = strlen($1) + strlen($2) + 1;
+	($$) = malloc(len);
+	snprintf(($$), len, "%s %s", $1, $2); 
+#else
+asprintf(&($$), "%s %s", $1, $2); 
+#endif
+free($1); free($2); }
 ;
 
 command_spec
