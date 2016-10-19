@@ -72,27 +72,30 @@ static void set_default_tcp_options(struct wire_conn *conn)
 	DEBUGP("set_default_tcp_options fd %d\n", conn->fd);
 
 	/* Disable Nagle algorithm so packets go out ASAP regardless of size. */
+#ifndef ECOS
 	val = 1;
 	if (setsockopt(conn->fd, SOL_TCP, TCP_NODELAY, &val, sizeof(val)) < 0)
 		die_perror("setsockopt TCP_NODELAY");
-
+#endif
 	/* Set receive buffer to allow high throughput. */
-	val = 128*1024;
+	val = 128 * 1024;
 	if (setsockopt(conn->fd, SOL_SOCKET, SO_RCVBUF, &val,
-		       sizeof(val)) < 0) {
+	               sizeof(val)) < 0)
+	{
 		die_perror("setsockopt SO_RCVBUF");
 	}
 
 	/* Set send buffer to allow high throughput and avoid blocking. */
-	val = 128*1024;
+	val = 128 * 1024;
 	if (setsockopt(conn->fd, SOL_SOCKET, SO_SNDBUF, &val,
-		       sizeof(val)) < 0) {
+	               sizeof(val)) < 0)
+	{
 		die_perror("setsockopt SO_SNDBUF");
 	}
 }
 
 void wire_conn_connect(struct wire_conn *conn,
-		       const struct ip_address *ip, u16 port)
+                       const struct ip_address *ip, u16 port)
 {
 	DEBUGP("wire_conn_connect\n");
 	struct sockaddr_storage sa;
@@ -103,7 +106,8 @@ void wire_conn_connect(struct wire_conn *conn,
 
 	/* Do a blocking connect to the server. */
 	ip_to_sockaddr(ip, port, (struct sockaddr *)&sa, &length);
-	if (connect(conn->fd, (struct sockaddr *)&sa, length) < 0) {
+	if (connect(conn->fd, (struct sockaddr *)&sa, length) < 0)
+	{
 		char ip_string[ADDR_STR_LEN];
 		die("error connecting to wire server at %s:%d: %s\n",
 		    ip_to_string(ip, ip_string), port, strerror(errno));
@@ -120,7 +124,8 @@ void wire_conn_bind_listen(struct wire_conn *listen_conn, u16 port)
 
 	val = 1;
 	if (setsockopt(listen_conn->fd, SOL_SOCKET, SO_REUSEADDR,
-		       &val, sizeof(val)) < 0) {
+	               &val, sizeof(val)) < 0)
+	{
 		die_perror("setsockopt SO_REUSEADDR");
 	}
 
@@ -133,7 +138,8 @@ void wire_conn_bind_listen(struct wire_conn *listen_conn, u16 port)
 	sa_v4.sin_addr.s_addr = INADDR_ANY;
 
 	if (bind(listen_conn->fd, (struct sockaddr *)&sa_v4,
-		 sizeof(sa_v4)) < 0) {
+	         sizeof(sa_v4)) < 0)
+	{
 		die_perror("bind");
 	}
 
@@ -142,7 +148,7 @@ void wire_conn_bind_listen(struct wire_conn *listen_conn, u16 port)
 }
 
 void wire_conn_accept(struct wire_conn *listen_conn,
-		      struct wire_conn **accepted_conn)
+                      struct wire_conn **accepted_conn)
 {
 	int fd = -1;
 
@@ -165,14 +171,19 @@ void wire_conn_accept(struct wire_conn *listen_conn,
  * the writes should complete in one call.
  */
 static int write_bytes(struct wire_conn *conn,
-		       const void *buf, int buf_len)
+                       const void *buf, int buf_len)
 {
-	while (buf_len > 0) {
+	while (buf_len > 0)
+	{
 		int bytes_written = write(conn->fd, buf, buf_len);
-		if (bytes_written < 0) {
-			if (errno == EINTR || errno == EAGAIN) {
+		if (bytes_written < 0)
+		{
+			if (errno == EINTR || errno == EAGAIN)
+			{
 				continue;
-			} else {
+			}
+			else
+			{
 				perror("TCP socket write");
 				return STATUS_ERR;
 			}
@@ -185,8 +196,8 @@ static int write_bytes(struct wire_conn *conn,
 }
 
 int wire_conn_write(struct wire_conn *conn,
-		    enum wire_op_t op,
-		    const void *buf, int buf_len)
+                    enum wire_op_t op,
+                    const void *buf, int buf_len)
 {
 	DEBUGP("wire_conn_write -> op: %s\n",
 	       wire_op_to_string(op));
@@ -206,18 +217,25 @@ int wire_conn_write(struct wire_conn *conn,
 
 /* Do blocking reads until we've read the given number of bytes. */
 static int read_bytes(struct wire_conn *conn,
-		      void *buf, int buf_len)
+                      void *buf, int buf_len)
 {
-	while (buf_len > 0) {
+	while (buf_len > 0)
+	{
 		int bytes_read = read(conn->fd, buf, buf_len);
-		if (bytes_read < 0) {
-			if (errno == EINTR || errno == EAGAIN) {
+		if (bytes_read < 0)
+		{
+			if (errno == EINTR || errno == EAGAIN)
+			{
 				continue;
-			} else {
+			}
+			else
+			{
 				perror("TCP socket read");
 				return STATUS_ERR;
 			}
-		} else if (bytes_read == 0) {
+		}
+		else if (bytes_read == 0)
+		{
 			fprintf(stderr, "remote side closed connection\n");
 			return STATUS_ERR;
 		}
@@ -229,8 +247,8 @@ static int read_bytes(struct wire_conn *conn,
 }
 
 int wire_conn_read(struct wire_conn *conn,
-		   enum wire_op_t *op,
-		   void **buf, int *buf_len)
+                   enum wire_op_t *op,
+                   void **buf, int *buf_len)
 {
 	DEBUGP("wire_conn_read\n");
 
@@ -244,13 +262,15 @@ int wire_conn_read(struct wire_conn *conn,
 	DEBUGP("wire_conn_read -> op: %s\n", wire_op_to_string(*op));
 
 	*buf_len = ntohl(header.length) - sizeof(header);
-	if ((*buf_len < 0) || (*buf_len > MAX_MESSAGE_BYTES)) {
+	if ((*buf_len < 0) || (*buf_len > MAX_MESSAGE_BYTES))
+	{
 		fprintf(stderr, "invalid length %d from remote wire conn\n",
-			*buf_len);
+		        *buf_len);
 		return STATUS_ERR;
 	}
 
-	if (conn->in.buf_space < *buf_len) {
+	if (conn->in.buf_space < *buf_len)
+	{
 		free(conn->in.buf);
 		conn->in.buf_space = 2 * *buf_len;
 		conn->in.buf = malloc(conn->in.buf_space);
