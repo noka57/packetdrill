@@ -45,12 +45,14 @@
 #define ETH_P_ALL       0x0003
 
 /* Ethernet address. */
-struct ether_addr {
+struct ether_addr
+{
 	u8 ether_addr_octet[ETH_ALEN];
 } __attribute__ ((__packed__));
 
 /* Ethernet header. */
-struct ether_header {
+struct ether_header
+{
 	u8  ether_dhost[ETH_ALEN];	/* destination Ethernet address */
 	u8  ether_shost[ETH_ALEN];	/* source Ethernet address */
 	u16 ether_type;			/* packet type ID field */
@@ -69,7 +71,10 @@ static inline u16 ether_type_for_family(int address_family)
 	else if (address_family == AF_INET6)
 		return ETHERTYPE_IPV6;
 	else
+	{
 		assert(!"bad address family");
+		return 0;
+	}
 }
 
 #endif /* __ETHERNET_H__ */
