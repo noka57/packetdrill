@@ -30,10 +30,14 @@
 #include "ipv6.h"
 #include "sctp.h"
 #include "tcp.h"
+#ifdef ECOS
+#include "patch_for_ecos.h"
+#endif
 
 static void test_tcp_udp_v4_checksum(void)
 {
-	u8 data[] = {
+	u8 data[] =
+	{
 		0x45, 0x00, 0x00, 0x3c, 0x00, 0x00, 0x00, 0x00,
 		0xff, 0x06, 0xf9, 0x10, 0x01, 0x01, 0x01, 0x01,
 		0xc0, 0xa8, 0x00, 0x01, 0x04, 0xd2, 0xeb, 0x35,
@@ -49,9 +53,13 @@ static void test_tcp_udp_v4_checksum(void)
 	int len = sizeof(data) - sizeof(struct ipv4);
 	u16 checksum = 0;
 
+#ifdef ECOS
+	assert(inet_pton_PATCH(AF_INET, "1.1.1.1", &src_ip) == 1);
+	assert(inet_pton_PATCH(AF_INET, "192.168.0.1", &dst_ip) == 1);
+#else
 	assert(inet_pton(AF_INET, "1.1.1.1", &src_ip) == 1);
 	assert(inet_pton(AF_INET, "192.168.0.1", &dst_ip) == 1);
-
+#endif
 	checksum =
 	    ntohs(tcp_udp_v4_checksum(src_ip, dst_ip, IPPROTO_TCP, tcp, len));
 	assert(checksum == 0);
@@ -64,7 +72,8 @@ static void test_tcp_udp_v4_checksum(void)
 
 static void test_tcp_udp_v6_checksum(void)
 {
-	u8 data[] = {
+	u8 data[] =
+	{
 		0x60, 0x00, 0x00, 0x00, 0x00, 0x20, 0x06, 0xff,
 		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
@@ -83,21 +92,22 @@ static void test_tcp_udp_v6_checksum(void)
 
 	checksum =
 	    ntohs(tcp_udp_v6_checksum(&ipv6->src_ip,
-				      &ipv6->dst_ip,
-				      IPPROTO_TCP, tcp, len));
+	                              &ipv6->dst_ip,
+	                              IPPROTO_TCP, tcp, len));
 	assert(checksum == 0);
 
 	tcp->check = 0;
 	checksum =
 	    ntohs(tcp_udp_v6_checksum(&ipv6->src_ip,
-				      &ipv6->dst_ip,
-				      IPPROTO_TCP, tcp, len));
+	                              &ipv6->dst_ip,
+	                              IPPROTO_TCP, tcp, len));
 	assert(checksum == 0x0660);
 }
 
 static void test_ipv4_checksum(void)
 {
-	u8 data[] = {
+	u8 data[] =
+	{
 		0x45, 0x00, 0x00, 0x3c, 0x00, 0x00, 0x00, 0x00,
 		0xff, 0x06, 0xf9, 0x10, 0x01, 0x01, 0x01, 0x01,
 		0xc0, 0xa8, 0x00, 0x01,
@@ -115,7 +125,8 @@ static void test_ipv4_checksum(void)
 
 static void test_sctp_crc32c(void)
 {
-	u8 data[] = {
+	u8 data[] =
+	{
 		0x07, 0xd0, 0xd6, 0x61, 0x11, 0x0c, 0xc5, 0x6c,
 		0xda, 0xd7, 0x37, 0x74, 0x06, 0x00, 0x00, 0x0f,
 		0x00, 0x0c, 0x00, 0x0b, 0x47, 0x6f, 0x6f, 0x64,

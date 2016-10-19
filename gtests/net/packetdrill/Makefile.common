@@ -1,7 +1,10 @@
-all: binaries
-
-CFLAGS = -g -Wall -Werror -DECOS -I/cygdrive/c/cygwin/E2500_install/include
+PKG_INSTALL_DIR=/cygdrive/c/cygwin/E2500_install
+CFLAGS = -g -Wall -Werror -DECOS -I$(PKG_INSTALL_DIR)/include
 CC = /opt/ecos/gnutools/arm-elf/bin/arm-elf-gcc.exe
+LDFLAGS= -nostdlib -L$(PKG_INSTALL_DIR)/lib  -Wl,--gc-sections -Wl,--Map -Wl
+LIBS=-T $(PKG_INSTALL_DIR)/lib/target.ld
+
+all: packetdrill
 
 parser.o: parser.y
 	bison --output=parser.c --defines=parser.h --report=state parser.y
@@ -34,30 +37,8 @@ packetdrill-lib := \
 packetdrill-objs := packetdrill.o $(packetdrill-lib)
 
 packetdrill: $(packetdrill-objs)
-	$(CC) -o packetdrill -g -static $(packetdrill-objs) $(packetdrill-ext-libs)
-
-test-bins := checksum_test packet_parser_test packet_to_string_test
-tests: $(test-bins)
-	./checksum_test
-	./packet_parser_test
-	./packet_to_string_test
-
-binaries: packetdrill $(test-bins)
-
-checksum_test-objs := $(packetdrill-lib) checksum_test.o
-checksum_test: $(checksum_test-objs)
-	$(CC) -o checksum_test $(checksum_test-objs) $(packetdrill-ext-libs)
-
-packet_parser_test-objs := $(packetdrill-lib) packet_parser_test.o
-packet_parser_test: $(packet_parser_test-objs)
-	$(CC) -o packet_parser_test $(packet_parser_test-objs) \
-                $(packetdrill-ext-libs)
-
-packet_to_string_test-objs := $(packetdrill-lib) packet_to_string_test.o
-packet_to_string_test: $(packet_to_string_test-objs)
-	$(CC) -o packet_to_string_test $(packet_to_string_test-objs) \
-                $(packetdrill-ext-libs)
-
+	ar rcs packetdrill.a $(packetdrill-objs)
+     
 clean:
-	/bin/rm -f *.o packetdrill lexer.c parser.c parser.h parser.output \
-                $(test-bins)
+	/bin/rm -f *.o *.a packetdrill lexer.c parser.c parser.h parser.output
+

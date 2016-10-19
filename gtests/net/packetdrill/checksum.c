@@ -43,11 +43,13 @@ static u64 ip_checksum_partial(const void *p, size_t len, u64 sum)
 
 	/* Handle un-32bit-aligned trailing bytes */
 	const u16 *p16 = (const u16 *)(p32);
-	if (len >= 2) {
+	if (len >= 2)
+	{
 		sum += *p16++;
 		len -= sizeof(*p16);
 	}
-	if (len > 0) {
+	if (len > 0)
+	{
 		const u8 *p8 = (const u8 *)(p16);
 		sum += ntohs(*p8 << 8);	/* RFC says pad last byte */
 	}
@@ -66,13 +68,16 @@ static __be16 ip_checksum_fold(u64 sum)
 }
 
 static u64 tcp_udp_v4_header_checksum_partial(
-	struct in_addr src_ip, struct in_addr dst_ip, u8 protocol, u16 len)
+    struct in_addr src_ip, struct in_addr dst_ip, u8 protocol, u16 len)
 {
 	/* The IPv4 pseudo-header is defined in RFC 793, Section 3.1. */
-	struct ipv4_pseudo_header_t {
+	struct ipv4_pseudo_header_t
+	{
 		/* We use a union here to avoid aliasing issues with gcc -O2 */
-		union {
-			struct header {
+		union
+		{
+			struct header
+			{
 				struct in_addr src_ip;
 				struct in_addr dst_ip;
 				__u8 mbz;
@@ -95,10 +100,10 @@ static u64 tcp_udp_v4_header_checksum_partial(
 }
 
 __be16 tcp_udp_v4_checksum(struct in_addr src_ip, struct in_addr dst_ip,
-			   u8 protocol, const void *payload, u16 len)
+                           u8 protocol, const void *payload, u16 len)
 {
 	u64 sum = tcp_udp_v4_header_checksum_partial(
-		src_ip, dst_ip, protocol, len);
+	              src_ip, dst_ip, protocol, len);
 	sum = ip_checksum_partial(payload, len, sum);
 	return ip_checksum_fold(sum);
 }
@@ -107,19 +112,22 @@ __be16 tcp_udp_v4_checksum(struct in_addr src_ip, struct in_addr dst_ip,
 __be16 ipv4_checksum(void *ip_header, size_t ip_header_bytes)
 {
 	return ip_checksum_fold(
-		ip_checksum_partial(ip_header, ip_header_bytes, 0));
+	           ip_checksum_partial(ip_header, ip_header_bytes, 0));
 }
 
 static u64 tcp_udp_v6_header_checksum_partial(
-	const struct in6_addr *src_ip,
-	const struct in6_addr *dst_ip,
-	u8 protocol, u32 len)
+    const struct in6_addr *src_ip,
+    const struct in6_addr *dst_ip,
+    u8 protocol, u32 len)
 {
 	/* The IPv6 pseudo-header is defined in RFC 2460, Section 8.1. */
-	struct ipv6_pseudo_header_t {
+	struct ipv6_pseudo_header_t
+	{
 		/* We use a union here to avoid aliasing issues with gcc -O2 */
-		union {
-			struct header {
+		union
+		{
+			struct header
+			{
 				struct in6_addr src_ip;
 				struct in6_addr dst_ip;
 				__be32 length;
@@ -142,18 +150,19 @@ static u64 tcp_udp_v6_header_checksum_partial(
 }
 
 __be16 tcp_udp_v6_checksum(const struct in6_addr *src_ip,
-			   const struct in6_addr *dst_ip,
-			   u8 protocol, const void *payload, u32 len)
+                           const struct in6_addr *dst_ip,
+                           u8 protocol, const void *payload, u32 len)
 {
 	u64 sum = tcp_udp_v6_header_checksum_partial(
-		src_ip, dst_ip, protocol, len);
+	              src_ip, dst_ip, protocol, len);
 	sum = ip_checksum_partial(payload, len, sum);
 	return ip_checksum_fold(sum);
 }
 
 #define CRC32C(c, d) (c = (c>>8) ^ crc_c[(c^(d))&0xFF])
 
-static u32 crc_c[256] = {
+static u32 crc_c[256] =
+{
 	0x00000000, 0xF26B8303, 0xE13B70F7, 0x1350F3F4,
 	0xC79A971F, 0x35F1141C, 0x26A1E7E8, 0xD4CA64EB,
 	0x8AD958CF, 0x78B2DBCC, 0x6BE22838, 0x9989AB3B,
@@ -231,9 +240,9 @@ __be32 sctp_crc32c(const void *packet, u32 len)
 		CRC32C(crc32c, buf[i]);
 	crc32c = ~crc32c;
 	byte0  = crc32c & 0xff;
-	byte1  = (crc32c>>8) & 0xff;
-	byte2  = (crc32c>>16) & 0xff;
-	byte3  = (crc32c>>24) & 0xff;
+	byte1  = (crc32c >> 8) & 0xff;
+	byte2  = (crc32c >> 16) & 0xff;
+	byte3  = (crc32c >> 24) & 0xff;
 	crc32c = ((byte0 << 24) | (byte1 << 16) | (byte2 << 8) | byte3);
 	return htonl(crc32c);
 }
