@@ -44,7 +44,7 @@ void wire_client_free(struct wire_client *wire_client)
 }
 
 static void wire_client_die(struct wire_client *wire_client,
-			    const char *message)
+                            const char *message)
 {
 	die("error in TCP connection to wire server: %s\n", message);
 }
@@ -54,14 +54,15 @@ static void wire_client_die(struct wire_client *wire_client,
  * since we don't want to give the server an identity crisis.
  */
 static void wire_client_serialize_argv(const char **argv, char **args_ptr,
-				       int *args_len_ptr)
+                                       int *args_len_ptr)
 {
 	int i;
 	char *args = NULL;
 	int args_len = 0;
 	char *end = NULL;
 
-	for (i = 0; argv[i]; ++i) {
+	for (i = 0; argv[i]; ++i)
+	{
 		if (strstr(argv[i], "-wire_client"))
 			continue;
 		args_len += strlen(argv[i]) + 1;	/* + 1 for '\0' */
@@ -70,7 +71,8 @@ static void wire_client_serialize_argv(const char **argv, char **args_ptr,
 	args = calloc(args_len, 1);
 	end = args;
 
-	for (i = 0; argv[i]; ++i) {
+	for (i = 0; argv[i]; ++i)
+	{
 		int len = 0;
 		if (strstr(argv[i], "-wire_client"))
 			continue;
@@ -89,7 +91,7 @@ static void wire_client_serialize_argv(const char **argv, char **args_ptr,
  * arguments as a single serialized string.
  */
 static void wire_client_send_args(struct wire_client *wire_client,
-				  const struct config *config)
+                                  const struct config *config)
 {
 	char *args = NULL;
 	int args_len = 0;
@@ -97,46 +99,46 @@ static void wire_client_send_args(struct wire_client *wire_client,
 	wire_client_serialize_argv(config->argv, &args, &args_len);
 
 	if (wire_conn_write(wire_client->wire_conn,
-				    WIRE_COMMAND_LINE_ARGS,
-				    args, args_len))
+	                    WIRE_COMMAND_LINE_ARGS,
+	                    args, args_len))
 		wire_client_die(wire_client,
-				"error sending WIRE_COMMAND_LINE_ARGS");
+		                "error sending WIRE_COMMAND_LINE_ARGS");
 	free(args);
 }
 
 /* Send the path name of the script we're about to run. */
 static void wire_client_send_script_path(struct wire_client *wire_client,
-					 const struct config *config)
+                                         const struct config *config)
 {
 	if (wire_conn_write(wire_client->wire_conn,
-				    WIRE_SCRIPT_PATH,
-				    config->script_path,
-				    strlen(config->script_path)))
+	                    WIRE_SCRIPT_PATH,
+	                    config->script_path,
+	                    strlen(config->script_path)))
 		wire_client_die(wire_client,
-				"error sending WIRE_SCRIPT_PATH");
+		                "error sending WIRE_SCRIPT_PATH");
 }
 
 /* Send the ASCII contents of the script we're about to run. */
 static void wire_client_send_script(struct wire_client *wire_client,
-				    const struct script *script)
+                                    const struct script *script)
 {
 	if (wire_conn_write(wire_client->wire_conn,
-				    WIRE_SCRIPT,
-				    script->buffer, script->length))
+	                    WIRE_SCRIPT,
+	                    script->buffer, script->length))
 		wire_client_die(wire_client,
-				"error sending WIRE_SCRIPT");
+		                "error sending WIRE_SCRIPT");
 }
 
 /* Send the ethernet address to which the server should send packets. */
 static void wire_client_send_hw_address(struct wire_client *wire_client,
-					const struct config *config)
+                                        const struct config *config)
 {
 	if (wire_conn_write(wire_client->wire_conn,
-				    WIRE_HARDWARE_ADDR,
-				    &wire_client->client_ether_addr,
-				    sizeof(wire_client->client_ether_addr)))
+	                    WIRE_HARDWARE_ADDR,
+	                    &wire_client->client_ether_addr,
+	                    sizeof(wire_client->client_ether_addr)))
 		wire_client_die(wire_client,
-				"error sending WIRE_HARDWARE_ADDR");
+		                "error sending WIRE_HARDWARE_ADDR");
 }
 
 /* Receive server's message that the server is ready to execute the script. */
@@ -147,15 +149,17 @@ static void wire_client_receive_server_ready(struct wire_client *wire_client)
 	int buf_len = -1;
 
 	if (wire_conn_read(wire_client->wire_conn,
-				   &op, &buf, &buf_len))
+	                   &op, &buf, &buf_len))
 		wire_client_die(wire_client, "error reading WIRE_SERVER_READY");
-	if (op != WIRE_SERVER_READY) {
+	if (op != WIRE_SERVER_READY)
+	{
 		wire_client_die(wire_client,
-				"bad wire server: expected WIRE_SERVER_READY");
+		                "bad wire server: expected WIRE_SERVER_READY");
 	}
-	if (buf_len != 0) {
+	if (buf_len != 0)
+	{
 		wire_client_die(wire_client,
-				"bad wire server: bad WIRE_SERVER_READY len");
+		                "bad wire server: bad WIRE_SERVER_READY len");
 	}
 }
 
@@ -163,10 +167,10 @@ static void wire_client_receive_server_ready(struct wire_client *wire_client)
 void wire_client_send_client_starting(struct wire_client *wire_client)
 {
 	if (wire_conn_write(wire_client->wire_conn,
-				    WIRE_CLIENT_STARTING,
-				    NULL, 0))
+	                    WIRE_CLIENT_STARTING,
+	                    NULL, 0))
 		wire_client_die(wire_client,
-				"error sending WIRE_CLIENT_STARTING");
+		                "error sending WIRE_CLIENT_STARTING");
 }
 
 /* Send a client request for the server to execute some packet events. */
@@ -175,10 +179,10 @@ static void wire_client_send_packets_start(struct wire_client *wire_client)
 	struct wire_packets_start start;
 	start.num_events = htonl(wire_client->num_events);
 	if (wire_conn_write(wire_client->wire_conn,
-			    WIRE_PACKETS_START,
-			    &start, sizeof(start)))
+	                    WIRE_PACKETS_START,
+	                    &start, sizeof(start)))
 		wire_client_die(wire_client,
-				"error sending WIRE_PACKETS_START");
+		                "error sending WIRE_PACKETS_START");
 }
 
 /* Receive a message from the server that the server is done executing
@@ -193,46 +197,61 @@ static void wire_client_receive_packets_done(struct wire_client *wire_client)
 
 	DEBUGP("wire_client_receive_packets_done\n");
 
-	while (1) {
+	while (1)
+	{
 		if (wire_conn_read(wire_client->wire_conn,
-				   &op, &buf, &buf_len))
+		                   &op, &buf, &buf_len))
 			wire_client_die(wire_client, "error reading");
 		if (op == WIRE_PACKETS_DONE)
 			break;
-		else if (op == WIRE_PACKETS_WARN) {
+		else if (op == WIRE_PACKETS_WARN)
+		{
 			/* NULL-terminate the warning and print it. */
 			char *warning = strndup(buf, buf_len);
 			fprintf(stderr, "%s", warning);
 			free(warning);
-		} else {
+		}
+		else
+		{
 			wire_client_die(
-				wire_client,
-				"bad wire server: expected "
-				"WIRE_PACKETS_DONE or WIRE_PACKETS_WARN");
+			    wire_client,
+			    "bad wire server: expected "
+			    "WIRE_PACKETS_DONE or WIRE_PACKETS_WARN");
 		}
 	}
 
-	if (buf_len < sizeof(done) + 1) {
+	if (buf_len < sizeof(done) + 1)
+	{
 		wire_client_die(wire_client,
-				"bad wire server: bad WIRE_PACKETS_DONE len");
+		                "bad wire server: bad WIRE_PACKETS_DONE len");
 	}
-	if (((char *)buf)[buf_len - 1] != '\0') {
+	if (((char *)buf)[buf_len - 1] != '\0')
+	{
 		wire_client_die(wire_client,
-				"bad wire server: missing string terminator");
+		                "bad wire server: missing string terminator");
 	}
 
 	memcpy(&done, buf, sizeof(done));
 
-	if (ntohl(done.result) == STATUS_ERR) {
+	if (ntohl(done.result) == STATUS_ERR)
+	{
 		/* Die with the error message from the server, which
 		 * is a C string following the fixed "done" message.
 		 */
 		die("%s", (char *)(buf + sizeof(done)));
-	} else if (ntohl(done.num_events) != wire_client->num_events) {
+	}
+	else if (ntohl(done.num_events) != wire_client->num_events)
+	{
 		char *msg = NULL;
+#ifdef ECOS
+		int len = strlen("bad wire server: bad message count: got:  vs expected: ") + 16;
+		msg = malloc(len);
+		snprintf(msg, len, "bad wire server: bad message count: got: %d vs expected: %d", ntohl(done.num_events), wire_client->num_events);
+#else
 		asprintf(&msg, "bad wire server: bad message count: "
-			 "got: %d vs expected: %d",
-			 ntohl(done.num_events), wire_client->num_events);
+		         "got: %d vs expected: %d",
+		         ntohl(done.num_events), wire_client->num_events);
+#endif
 		wire_client_die(wire_client, msg);
 	}
 }
@@ -241,20 +260,20 @@ static void wire_client_receive_packets_done(struct wire_client *wire_client)
  * options, the script we're going to execute, and our MAC address.
  */
 int wire_client_init(struct wire_client *wire_client,
-		     const struct config *config,
-		     const struct script *script,
-		     const struct state *state)
+                     const struct config *config,
+                     const struct script *script,
+                     const struct state *state)
 {
 	DEBUGP("wire_client_init\n");
 	assert(config->is_wire_client);
 
 	get_hw_address(config->wire_client_device,
-		       &wire_client->client_ether_addr);
+	               &wire_client->client_ether_addr);
 
 	wire_client->wire_conn = wire_conn_new();
 	wire_conn_connect(wire_client->wire_conn,
-				  &config->wire_server_ip,
-				  config->wire_server_port);
+	                  &config->wire_server_ip,
+	                  config->wire_server_port);
 
 	wire_client_send_args(wire_client, config);
 
@@ -280,21 +299,24 @@ int wire_client_init(struct wire_client *wire_client,
  * on-the-wire event.
  */
 void wire_client_next_event(struct wire_client *wire_client,
-			    struct event *event)
+                            struct event *event)
 {
 	/* Tell the server to start executing packet events. */
 	if (event && (event->type == PACKET_EVENT) &&
-	    (wire_client->last_event_type != PACKET_EVENT)) {
+	        (wire_client->last_event_type != PACKET_EVENT))
+	{
 		wire_client_send_packets_start(wire_client);
 	}
 
 	/* Get the result from server execution of one or more packet events. */
 	if ((!event || (event->type != PACKET_EVENT)) &&
-	    (wire_client->last_event_type == PACKET_EVENT)) {
+	        (wire_client->last_event_type == PACKET_EVENT))
+	{
 		wire_client_receive_packets_done(wire_client);
 	}
 
-	if (event) {
+	if (event)
+	{
 		wire_client->last_event_type = event->type;
 		++wire_client->num_events;
 	}
