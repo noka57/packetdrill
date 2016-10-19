@@ -36,7 +36,8 @@
 #include "wire_server_netdev.h"
 
 /* Internal private state for the wire server to run one script. */
-struct wire_server {
+struct wire_server
+{
 	struct wire_conn *wire_conn;		/* connection to wire client */
 	u16 port;				/* port we listen on */
 
@@ -59,8 +60,8 @@ struct wire_server {
 };
 
 static struct wire_server *wire_server_new(struct wire_conn *accepted_conn,
-					   const char *wire_server_device,
-					   u16 wire_server_port)
+                                           const char *wire_server_device,
+                                           u16 wire_server_port)
 {
 	struct wire_server *wire_server = calloc(1, sizeof(struct wire_server));
 	wire_server->wire_conn = accepted_conn;
@@ -84,14 +85,15 @@ static void wire_server_free(struct wire_server *wire_server)
  * args. Add a --wire_server so that we don't have an identity crisis.
  */
 static void wire_server_unserialize_argv(struct wire_server *wire_server,
-					 const char *args, int args_len)
+                                         const char *args, int args_len)
 {
 	int argc, i;
 	char **argv = NULL;
 	const char *end = NULL;
 
 	argc = 0;
-	for (i = 0; i < args_len; ++i) {
+	for (i = 0; i < args_len; ++i)
+	{
 		if (args[i] == '\0')
 			++argc;
 	}
@@ -105,11 +107,20 @@ static void wire_server_unserialize_argv(struct wire_server *wire_server,
 	argv = calloc(argc + 1, sizeof(char *));
 
 	end = args;
-	for (i = 0; i < argc; ++i) {
+	for (i = 0; i < argc; ++i)
+	{
 		argv[i] = strdup(end);
 		end += strlen(end) + 1;	/* + 1 for '\0' */
 	}
-	asprintf(&argv[argc-1], "--wire_server");
+	{
+#ifdef ECOS
+		int len = strlen("--wire_server");
+		argv[argc - 1] = malloc(len);
+		snprintf(argv[argc - 1], len, "--wire_server");
+#else
+		asprintf(&argv[argc - 1], "--wire_server");
+#endif
+	}
 
 	for (i = 0; i < argc; ++i)
 		DEBUGP("argv[%d] = '%s'\n", i, argv[i]);
@@ -127,14 +138,15 @@ static int wire_server_receive_args(struct wire_server *wire_server)
 
 	if (wire_conn_read(wire_server->wire_conn, &op, &buf, &buf_len))
 		return STATUS_ERR;
-	if (op != WIRE_COMMAND_LINE_ARGS) {
+	if (op != WIRE_COMMAND_LINE_ARGS)
+	{
 		fprintf(stderr,
-			"bad wire client: expected WIRE_COMMAND_LINE_ARGS\n");
+		        "bad wire client: expected WIRE_COMMAND_LINE_ARGS\n");
 		return STATUS_ERR;
 	}
 
 	wire_server_unserialize_argv(wire_server,
-				     buf, buf_len);
+	                             buf, buf_len);
 
 	return STATUS_OK;
 }
@@ -148,9 +160,10 @@ static int wire_server_receive_script_path(struct wire_server *wire_server)
 
 	if (wire_conn_read(wire_server->wire_conn, &op, &buf, &buf_len))
 		return STATUS_ERR;
-	if (op != WIRE_SCRIPT_PATH) {
+	if (op != WIRE_SCRIPT_PATH)
+	{
 		fprintf(stderr,
-			"bad wire client: expected WIRE_SCRIPT_PATH\n");
+		        "bad wire client: expected WIRE_SCRIPT_PATH\n");
 		return STATUS_ERR;
 	}
 
@@ -168,9 +181,10 @@ static int wire_server_receive_script(struct wire_server *wire_server)
 
 	if (wire_conn_read(wire_server->wire_conn, &op, &buf, &buf_len))
 		return STATUS_ERR;
-	if (op != WIRE_SCRIPT) {
+	if (op != WIRE_SCRIPT)
+	{
 		fprintf(stderr,
-			"bad wire client: expected WIRE_SCRIPT\n");
+		        "bad wire client: expected WIRE_SCRIPT\n");
 		return STATUS_ERR;
 	}
 
@@ -189,14 +203,16 @@ static int wire_server_receive_hw_address(struct wire_server *wire_server)
 
 	if (wire_conn_read(wire_server->wire_conn, &op, &buf, &buf_len))
 		return STATUS_ERR;
-	if (op != WIRE_HARDWARE_ADDR) {
+	if (op != WIRE_HARDWARE_ADDR)
+	{
 		fprintf(stderr,
-			"bad wire client: expected WIRE_HARDWARE_ADDR\n");
+		        "bad wire client: expected WIRE_HARDWARE_ADDR\n");
 		return STATUS_ERR;
 	}
-	if (buf_len != sizeof(wire_server->client_ether_addr)) {
+	if (buf_len != sizeof(wire_server->client_ether_addr))
+	{
 		fprintf(stderr,
-			"bad wire client: bad hw address length\n");
+		        "bad wire client: bad hw address length\n");
 		return STATUS_ERR;
 	}
 
@@ -209,8 +225,9 @@ static int wire_server_receive_hw_address(struct wire_server *wire_server)
 static int wire_server_send_server_ready(struct wire_server *wire_server)
 {
 	if (wire_conn_write(wire_server->wire_conn,
-				    WIRE_SERVER_READY,
-				    NULL, 0)) {
+	                    WIRE_SERVER_READY,
+	                    NULL, 0))
+	{
 		fprintf(stderr, "error sending WIRE_SERVER_READY\n");
 		return STATUS_ERR;
 	}
@@ -226,14 +243,16 @@ static int wire_server_receive_client_starting(struct wire_server *wire_server)
 
 	if (wire_conn_read(wire_server->wire_conn, &op, &buf, &buf_len))
 		return STATUS_ERR;
-	if (op != WIRE_CLIENT_STARTING) {
+	if (op != WIRE_CLIENT_STARTING)
+	{
 		fprintf(stderr,
-			"bad wire client: expected WIRE_CLIENT_STARTING\n");
+		        "bad wire client: expected WIRE_CLIENT_STARTING\n");
 		return STATUS_ERR;
 	}
-	if (buf_len != 0) {
+	if (buf_len != 0)
+	{
 		fprintf(stderr,
-			"bad wire client: bad WIRE_CLIENT_STARTING length\n");
+		        "bad wire client: bad WIRE_CLIENT_STARTING length\n");
 		return STATUS_ERR;
 	}
 
@@ -250,22 +269,25 @@ static int wire_server_receive_packets_start(struct wire_server *wire_server)
 
 	if (wire_conn_read(wire_server->wire_conn, &op, &buf, &buf_len))
 		return STATUS_ERR;
-	if (op != WIRE_PACKETS_START) {
+	if (op != WIRE_PACKETS_START)
+	{
 		fprintf(stderr,
-			"bad wire client: expected WIRE_PACKETS_START\n");
+		        "bad wire client: expected WIRE_PACKETS_START\n");
 		return STATUS_ERR;
 	}
-	if (buf_len != sizeof(start)) {
+	if (buf_len != sizeof(start))
+	{
 		fprintf(stderr,
-			"bad wire client: bad WIRE_PACKETS_START length\n");
+		        "bad wire client: bad WIRE_PACKETS_START length\n");
 		return STATUS_ERR;
 	}
 
 	memcpy(&start, buf, sizeof(start));
-	if (ntohl(start.num_events) != wire_server->num_events) {
+	if (ntohl(start.num_events) != wire_server->num_events)
+	{
 		fprintf(stderr,
-			"bad client event count; expected %d but got %d",
-			wire_server->num_events, ntohl(start.num_events));
+		        "bad client event count; expected %d but got %d",
+		        wire_server->num_events, ntohl(start.num_events));
 		return STATUS_ERR;
 	}
 
@@ -274,10 +296,11 @@ static int wire_server_receive_packets_start(struct wire_server *wire_server)
 
 /* Send back to the client a human-readable warning about a fishy packet. */
 static int wire_server_send_packet_warning(struct wire_server *wire_server,
-					   const char *warning)
+                                           const char *warning)
 {
 	if (wire_conn_write(wire_server->wire_conn, WIRE_PACKETS_WARN,
-			    warning, strlen(warning))) {
+	                    warning, strlen(warning)))
+	{
 		fprintf(stderr, "error sending WIRE_PACKETS_WARN\n");
 		return STATUS_ERR;
 	}
@@ -286,8 +309,8 @@ static int wire_server_send_packet_warning(struct wire_server *wire_server,
 
 /* Tell the client that the server is done executing some packet events. */
 static int wire_server_send_packets_done(struct wire_server *wire_server,
-					 int result,
-					 const char *error)
+                                         int result,
+                                         const char *error)
 {
 	struct wire_packets_done done;
 	int error_len = strlen(error) + 1;	/* +1 for '\0' */
@@ -300,8 +323,9 @@ static int wire_server_send_packets_done(struct wire_server *wire_server,
 	memcpy(buf + sizeof(done), error, error_len);
 
 	if (wire_conn_write(wire_server->wire_conn,
-			    WIRE_PACKETS_DONE,
-			    buf, buf_len)) {
+	                    WIRE_PACKETS_DONE,
+	                    buf, buf_len))
+	{
 		fprintf(stderr, "error sending WIRE_PACKETS_DONE\n");
 		return STATUS_ERR;
 	}
@@ -311,23 +335,26 @@ static int wire_server_send_packets_done(struct wire_server *wire_server,
 
 /* Coordinate with the wire client. See wire_client_next_event(). */
 static int wire_server_next_event(struct wire_server *wire_server,
-				  struct event *event)
+                                  struct event *event)
 {
 	/* Wait for the client's request to start executing packet events. */
 	if (event && (event->type == PACKET_EVENT) &&
-	    (wire_server->last_event_type != PACKET_EVENT)) {
+	        (wire_server->last_event_type != PACKET_EVENT))
+	{
 		if (wire_server_receive_packets_start(wire_server))
 			return STATUS_ERR;
 	}
 
 	/* Send the result from server execution of packet events. */
 	if ((!event || (event->type != PACKET_EVENT)) &&
-	    (wire_server->last_event_type == PACKET_EVENT)) {
+	        (wire_server->last_event_type == PACKET_EVENT))
+	{
 		if (wire_server_send_packets_done(wire_server, STATUS_OK, ""))
 			return STATUS_ERR;
 	}
 
-	if (event) {
+	if (event)
+	{
 		wire_server->last_event_type = event->type;
 		++wire_server->num_events;
 	}
@@ -337,23 +364,26 @@ static int wire_server_next_event(struct wire_server *wire_server,
 
 /* Run the given packet event; send any error or warning back to the client. */
 static int wire_server_run_packet_event(
-	struct wire_server *wire_server, struct event *event,
-	struct packet *packet, char **error)
+    struct wire_server *wire_server, struct event *event,
+    struct packet *packet, char **error)
 {
 	int result = STATUS_OK;
 
 	result = run_packet_event(wire_server->state,
-					  event, packet, error);
-	if (result == STATUS_ERR) {
+	                          event, packet, error);
+	if (result == STATUS_ERR)
+	{
 		/* When we sniff an incorrect packet, don't exit the
 		 * process (we're a daemon), just return the error
 		 * message via the TCP socket and finish the thread.
 		 */
 		DEBUGP("wire_server_run_packet_event: error!\n");
 		if (wire_server_send_packets_done(wire_server, STATUS_ERR,
-						  *error))
+		                                  *error))
 			return STATUS_ERR;
-	} else if (result == STATUS_WARN) {
+	}
+	else if (result == STATUS_WARN)
+	{
 		/* A non-fatal problem with the packet. Return the
 		 * warning message via the TCP socket and keep going.
 		 */
@@ -373,7 +403,7 @@ static int wire_server_run_packet_event(
  * using a real NIC.
  */
 static int wire_server_run_script(struct wire_server *wire_server,
-				  char **error)
+                                  char **error)
 {
 	struct state *state = wire_server->state;
 	struct event *event = NULL;
@@ -384,7 +414,8 @@ static int wire_server_run_script(struct wire_server *wire_server,
 	DEBUGP("live_start_time_usecs is %lld\n",
 	       state->live_start_time_usecs);
 
-	while (1) {
+	while (1)
+	{
 		if (get_next_event(state, error))
 			return STATUS_ERR;
 		event = state->event;
@@ -399,11 +430,12 @@ static int wire_server_run_script(struct wire_server *wire_server,
 		 */
 		adjust_relative_event_times(state, event);
 
-		switch (event->type) {
+		switch (event->type)
+		{
 		case PACKET_EVENT:
 			if (wire_server_run_packet_event(wire_server, event,
-							 event->event.packet,
-							 error) == STATUS_ERR)
+			                                 event->event.packet,
+			                                 error) == STATUS_ERR)
 				return STATUS_ERR;
 			break;
 		case SYSCALL_EVENT:
@@ -419,7 +451,7 @@ static int wire_server_run_script(struct wire_server *wire_server,
 		case NUM_EVENT_TYPES:
 			assert(!"bogus type");
 			break;
-		/* We omit default case so compiler catches missing values. */
+			/* We omit default case so compiler catches missing values. */
 		}
 	}
 
@@ -455,25 +487,25 @@ static void *wire_server_thread(void *arg)
 		goto error_done;
 
 	if (parse_script_and_set_config(wire_server->argc,
-						wire_server->argv,
-						&wire_server->config,
-						&wire_server->script,
-						wire_server->script_path,
-						wire_server->script_buffer))
+	                                wire_server->argv,
+	                                &wire_server->config,
+	                                &wire_server->script,
+	                                wire_server->script_path,
+	                                wire_server->script_buffer))
 		goto error_done;
 
 	set_scheduling_priority();
 	lock_memory();
 
 	netdev =
-	  wire_server_netdev_new(&wire_server->config,
-				 wire_server->wire_server_device,
-				 &wire_server->client_ether_addr,
-				 &wire_server->server_ether_addr);
+	    wire_server_netdev_new(&wire_server->config,
+	                           wire_server->wire_server_device,
+	                           &wire_server->client_ether_addr,
+	                           &wire_server->server_ether_addr);
 
 	wire_server->state = state_new(&wire_server->config,
-					       &wire_server->script,
-					       netdev);
+	                               &wire_server->script,
+	                               netdev);
 
 	if (wire_server_send_server_ready(wire_server))
 		goto error_done;
@@ -504,7 +536,8 @@ static void start_wire_server_thread(struct wire_server *wire_server)
 
 	pthread_t thread;		/* pthread thread handle */
 	if (pthread_create(&thread, NULL, wire_server_thread,
-			   wire_server) != 0) {
+	                   wire_server) != 0)
+	{
 		die_perror("pthread_create");
 	}
 }
@@ -519,14 +552,15 @@ void run_wire_server(const struct config *config)
 
 	wire_conn_bind_listen(listen_conn, config->wire_server_port);
 
-	while (1) {
+	while (1)
+	{
 		struct wire_conn *accepted_conn = NULL;
 		wire_conn_accept(listen_conn, &accepted_conn);
 
 		struct wire_server *wire_server =
-			wire_server_new(accepted_conn,
-					config->wire_server_device,
-					config->wire_server_port);
+		    wire_server_new(accepted_conn,
+		                    config->wire_server_device,
+		                    config->wire_server_port);
 
 		start_wire_server_thread(wire_server);
 	}
